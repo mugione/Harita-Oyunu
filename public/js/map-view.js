@@ -52,6 +52,7 @@ export class MapView {
       t.dataset.name = item.name;
       t.dataset.code = item.code ?? '';
       t.style.setProperty('--lr', s.lr);
+      t.dataset.cw = s.cw ?? s.lr * 2;
       this.gLabels.append(t);
       this.labels.set(item.id, t);
     }
@@ -167,14 +168,25 @@ export class MapView {
   }
   bringToFront(id) { const p = this.paths.get(id); if (p) this.gShapes.append(p); }
 
-  // mode: 'none' | 'name' | 'code' | 'found'
+  // mode: 'none' | 'name' | 'code' | 'found' | 'all' (bütün adlar, ilin içine sığdırılmış)
   setLabels(mode, foundSet) {
     for (const [id, t] of this.labels) {
       let txt = '';
-      if (mode === 'name') txt = t.dataset.name;
+      if (mode === 'name' || mode === 'all') txt = t.dataset.name;
       else if (mode === 'code') txt = t.dataset.code;
       else if (mode === 'found' && foundSet?.has(id)) txt = t.dataset.name;
       t.textContent = txt;
+    }
+    if (mode === 'all') this.fitLabels();
+  }
+  // Her adı kendi ilinin genişliğine sığacak boyutta yaz (harita birimi cinsinden; yakınlaştıkça büyür)
+  fitLabels() {
+    for (const [id, t] of this.labels) {
+      t.style.setProperty('--fs', 10);
+      const w = t.getComputedTextLength() || t.textContent.length * 5.5;
+      const lr = +t.style.getPropertyValue('--lr'), cw = +t.dataset.cw;
+      const fs = Math.max(4.5, Math.min(10 * cw * 1.1 / w, lr * 1.3, 13));
+      t.style.setProperty('--fs', fs.toFixed(2));
     }
   }
 
@@ -193,7 +205,7 @@ export class MapView {
     const home = this.homeVb();
     const { w, h } = this.size();
     const mapPxH = h * (this.bounds.h / home.h);
-    const boost = clampN((h * 0.55) / mapPxH, 1, w < 560 ? 1.7 : 1);
+    const boost = clampN((h * 0.55) / mapPxH, 1, w < 560 ? (this.startBoost || 1.7) : 1);
     return this.scaled(home, 1 / boost);
   }
   scaled(v, k) {

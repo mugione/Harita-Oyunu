@@ -22,6 +22,7 @@ const prog = () => (store.progress[store.settings.map] ||= { discovered: [], mas
 // ---------------------------------------------------------------- modlar
 const MODES = [
   { id: 'explore',   icon: '🔍', title: 'Keşfet',        desc: 'İllere dokun, adını duy, bilgi kartını oku.', color: '#3DBE6E' },
+  { id: 'names',     icon: '🏷️', title: 'İsimli Harita',  desc: 'Bütün il adları haritada; dokun, bilgisini oku.', color: '#FF8A3D' },
   { id: 'find',      icon: '🎯', title: 'İli Bul',        desc: 'Söylenen ili haritada bul.',                  color: '#4F8CFF' },
   { id: 'identify',  icon: '❓', title: 'Bu Hangi İl?',   desc: 'Parlayan ilin adını seç.',                    color: '#A66CFF' },
   { id: 'plate',     icon: '🚗', title: 'Plaka Avı',      desc: 'Plaka numarasından ili bul.',                 color: '#FF8A3D', needs: 'codeLabel' },
@@ -160,15 +161,17 @@ function startGame(modeId) {
 
   show('game');
   $('#hudTitle').innerHTML = `<span>${mode.icon}</span> ${mode.title}`;
-  const free = modeId === 'explore' || modeId === 'atlas';
+  const free = modeId === 'explore' || modeId === 'atlas' || modeId === 'names';
   $('#hudStreakWrap').classList.toggle('hidden', free);
-  $('#hudScore').parentElement.classList.toggle('hidden', modeId === 'atlas');
-  $('#hudProgress').classList.toggle('hidden', modeId === 'atlas');
-  document.querySelector('.progress-bar').classList.toggle('hidden', modeId === 'atlas');
+  const noScore = modeId === 'atlas' || modeId === 'names';
+  $('#hudScore').parentElement.classList.toggle('hidden', noScore);
+  $('#hudProgress').classList.toggle('hidden', noScore);
+  document.querySelector('.progress-bar').classList.toggle('hidden', noScore);
+  $('#zLabels').classList.toggle('hidden', modeId === 'names');
   $('#btnHint').classList.toggle('hidden', free || modeId === 'identify');
   $('#btnSkip').classList.toggle('hidden', free);
   $('#atlas').classList.toggle('hidden', modeId !== 'atlas');
-  $('#zLayers').classList.toggle('hidden', !data.features?.length);
+  $('#zLayers').classList.toggle('hidden', !data.features?.length || modeId === 'names');
   $('#layerMenu').classList.add('hidden');
   $('#choices').classList.toggle('hidden', modeId !== 'identify');
   document.body.dataset.mode = modeId;
@@ -183,12 +186,14 @@ function startGame(modeId) {
     viewBox: data.viewBox, shapes: data.shapes, items: data.items, features: data.features, colorOf,
     onTap: handleTap, onFeatureTap: handleFeatureTap, onHover: handleHover,
   });
+  // İsimli haritada dikey telefonda adlar okunsun diye başlangıçta biraz daha yakın aç
+  if (modeId === 'names') view.startBoost = 2.4;
   if (modeId !== 'neighbors') for (const it of data.items) if (!game.poolIds.has(it.id)) view.set(it.id, 'off');
   if (modeId === 'explore') for (const id of prog().discovered) if (game.poolIds.has(id)) { view.set(id, 'found'); game.found.add(id); }
   if (store.settings.region !== 'all') setTimeout(() => view.fitIds([...game.poolIds], 0.08, 100), 60);
 
   applyLayers();
-  labelMode = ['explore', 'nature', 'atlas', 'resources'].includes(modeId) ? 'none' : (store.settings.level === 'hard' ? 'none' : 'found');
+  labelMode = modeId === 'names' ? 'all' : ['explore', 'nature', 'atlas', 'resources'].includes(modeId) ? 'none' : (store.settings.level === 'hard' ? 'none' : 'found');
   refreshLabels();
   renderLegend();
   updateHud();
@@ -205,7 +210,11 @@ function startGame(modeId) {
   next();
 }
 
-function refreshLabels() { view.setLabels(labelMode, game.found); $('#map').dataset.labels = labelMode; }
+function refreshLabels() {
+  view.setLabels(labelMode, game.found); $('#map').dataset.labels = labelMode;
+  // Yazı tipi geç yüklenirse ad genişlikleri değişir; yüklenince yeniden sığdır
+  if (labelMode === 'all') document.fonts?.ready.then(() => { if (labelMode === 'all') view.fitLabels(); });
+}
 
 function renderLegend() {
   const lg = $('#legend');
@@ -223,6 +232,7 @@ function next() {
   g.wrongTries = 0; g.hintLevel = 0; g.locked = false; g.neighborFound = new Set();
 
   if (g.mode.id === 'atlas') return atlasStart();
+  if (g.mode.id === 'names') return setPrompt('🏷️ Bir ile dokun, bilgi kartını aç! <small>Yakınlaştırınca adlar büyür.</small>');
   if (g.mode.id === 'explore') {
     setPrompt(`Bir ${mapDef.itemNoun}e dokun ve keşfet! <small>(${g.found.size}/${g.items.length})</small>`);
     return;
@@ -276,7 +286,7 @@ function updateHud() {
   $('#hudScore').textContent = fmt(g.score);
   $('#hudStreak').textContent = g.streak;
   let txt = '', pct = 0;
-  if (g.mode.id === 'atlas') return;
+  if (g.mode.id === 'atlas' || g.mode.id === 'names') return;
   if (g.mode.id === 'explore') { txt = `${g.found.size}/${g.items.length}`; pct = g.found.size / g.items.length; }
   else if (g.mode.id === 'timed') { txt = `⏳ ${g.timeLeft}s`; pct = g.timeLeft / 60; }
   else { txt = `${Math.min(g.index + 1, g.queue.length)}/${g.queue.length}`; pct = g.index / g.queue.length; }
@@ -314,6 +324,7 @@ function handleTap(id) {
   if (g.mode.id === 'atlas') { sfx.play('tap'); voice.say(item.name); view.flash(item.id, 'peek', 1200); return openInfo(item); }
 
   if (g.mode.id === 'explore') return exploreTap(item);
+  if (g.mode.id === 'names') return namesTap(item);
   if (g.mode.id === 'identify') {
     if (id === g.current.id) feedback('Evet, bu il! Adını aşağıdan seç 👇', 'info');
     else { view.flash(id, 'peek', 700); feedback(`Bu <b>${item.name}</b>. Aşağıdan parlayan ilin adını seç!`, 'info'); }
@@ -324,6 +335,15 @@ function handleTap(id) {
   const target = g.current;
   if (id === target.id) answerCorrect(target);
   else answerWrong(item, target);
+}
+
+function namesTap(item) {
+  sfx.play('tap');
+  voice.say(item.name);
+  view.clear('selected');
+  view.set(item.id, 'selected'); view.bringToFront(item.id);
+  setPrompt(`📍 <b>${item.name}</b> <span class="plate">${item.code}</span> <small>${data.regions[item.region].name}</small>`);
+  openInfo(item);
 }
 
 function exploreTap(item) {
@@ -484,7 +504,10 @@ function renderChoices() {
 // ---------------------------------------------------------------- coğrafi katmanlar
 function visibleLayers() {
   // Doğa Avı'nda bütün katmanlar açık; diğer modlarda kullanıcının seçimi geçerli
-  return game?.mode.id === 'nature' ? Object.keys(data.layerTypes || {}) : store.settings.layers;
+  if (game?.mode.id === 'nature') return Object.keys(data.layerTypes || {});
+  // İsimli haritada dağ simgeleri il adlarının üstüne binmesin
+  if (game?.mode.id === 'names') return ['lake', 'river', 'sea'];
+  return store.settings.layers;
 }
 function applyLayers() {
   if (!view) return;
@@ -492,7 +515,8 @@ function applyLayers() {
   const svg = $('#map');
   // Yalnızca Keşfet modunda katmanlara dokunulabilir; oyunlarda dokunuşlar alttaki ile gider
   svg.classList.toggle('layers-passive', game?.mode.id !== 'explore');
-  svg.classList.toggle('hide-flabels', game?.mode.id === 'nature');
+  // Doğa Avı'nda cevabı vermesin, İsimli Harita'da il adlarıyla karışmasın diye katman adları gizlenir
+  svg.classList.toggle('hide-flabels', game?.mode.id === 'nature' || game?.mode.id === 'names');
 }
 function renderLayerMenu() {
   const menu = $('#layerMenu');
@@ -644,7 +668,7 @@ function openFeatureInfo(f, { resume = false } = {}) {
   $('#infoBody').querySelectorAll('[data-prov]').forEach(b => b.onclick = () => {
     const it = byId.get(+b.dataset.prov);
     view.flash(it.id, 'peek', 1400);
-    if (game?.mode.id === 'explore') exploreTap(it); else openInfo(it, { resume });
+    if (game?.mode.id === 'explore') exploreTap(it); else if (game?.mode.id === 'names') namesTap(it); else openInfo(it, { resume });
   });
   if (resume) $('#infoContinue').onclick = () => { closeInfo(); next(); };
   showSheet(resume);
@@ -693,7 +717,7 @@ function bindCardLinks(resume) {
   body.querySelectorAll('[data-prov]').forEach(b => b.onclick = () => {
     const it = byId.get(+b.dataset.prov);
     view.flash(it.id, 'peek', 1400);
-    if (game?.mode.id === 'explore') exploreTap(it); else openInfo(it, { resume });
+    if (game?.mode.id === 'explore') exploreTap(it); else if (game?.mode.id === 'names') namesTap(it); else openInfo(it, { resume });
   });
 }
 const provChips = ids => `<div class="chips small">${ids.map(id => byId.get(id)).sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(p => `<button class="chip" data-prov="${p.id}">${p.name}</button>`).join('')}</div>`;
@@ -982,7 +1006,7 @@ function openInfo(item, { resume = false } = {}) {
   $('#infoSpeak').onclick = () => voice.say(`${item.name}. ${r.name} Bölgesinde. Plaka kodu ${item.plate}. ${item.fact} Meşhur lezzetleri: ${item.food}.`, { force: true });
   $('#infoBody').querySelectorAll('[data-nb]').forEach(b => b.onclick = () => {
     const nb = byId.get(+b.dataset.nb);
-    if (game?.mode.id === 'explore') exploreTap(nb);
+    if (game?.mode.id === 'explore') exploreTap(nb); else if (game?.mode.id === 'names') namesTap(nb);
     else { view.flash(nb.id, 'peek', 1400); openInfo(nb, { resume }); }
   });
   $('#infoBody').querySelectorAll('[data-feat]').forEach(b => b.onclick = () => {

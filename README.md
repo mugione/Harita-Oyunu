@@ -98,6 +98,7 @@ Türkiye'nin bitki örtüsü haritası (nemli orman, maki, bozkır, dağ çayır
 | | Mod | Nasıl oynanır? | Ne öğretir? |
 |:-:|---|---|---|
 | 🔍 | **Keşfet** | İstediğin ile dokun, adını duy, bilgi kartını oku | Serbest keşif, merak |
+| 🏷️ | **İsimli Harita** | 81 ilin adı haritada yazılı; dokun, bilgi kartını oku | İl adları ve yerleri |
 | 🎯 | **İli Bul** | *"Konya nerede?"* — haritada bul | İllerin konumu |
 | ❓ | **Bu Hangi İl?** | Parlayan ilin adını seçeneklerden seç | İl şekilleri, tanıma |
 | 🚗 | **Plaka Avı** | *"34 plakalı il hangisi?"* | Plaka kodları |

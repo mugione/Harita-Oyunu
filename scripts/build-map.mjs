@@ -86,6 +86,17 @@ function labelPoint(ring) {
   return { pt: best || [(x0 + x1) / 2, (y0 + y1) / 2], r: bestD };
 }
 
+function chord(ring, x, y) {
+  const xs = [];
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y)) xs.push(xi + (y - yi) * (xj - xi) / (yj - yi));
+  }
+  xs.sort((a, b) => a - b);
+  for (let i = 0; i + 1 < xs.length; i += 2) if (x >= xs[i] && x <= xs[i + 1]) return xs[i + 1] - xs[i];
+  return 0;
+}
+
 const out = {};
 const pointOwners = new Map();
 
@@ -116,7 +127,9 @@ for (const f of geo.features) {
     });
   }
   const lp = labelPoint(largest);
-  out[id] = { d, cx: +lp.pt[0].toFixed(1), cy: +lp.pt[1].toFixed(1), lr: +lp.r.toFixed(1), area: Math.round(area / 10) * 10, neighbors: new Set() };
+  // Etiket noktasından geçen yatay genişlik (il adını sığdırmak için); biraz üstü ve altıyla en darı alınır
+  const cw = Math.min(...[-0.35, 0, 0.35].map(k => chord(largest, lp.pt[0], lp.pt[1] + k * lp.r)));
+  out[id] = { d, cx: +lp.pt[0].toFixed(1), cy: +lp.pt[1].toFixed(1), lr: +lp.r.toFixed(1), cw: +cw.toFixed(1), area: Math.round(area / 10) * 10, neighbors: new Set() };
 }
 
 // Komşuluk: iki ilin sınır noktaları birbirine çok yakınsa (≈1,5 km) komşudur.

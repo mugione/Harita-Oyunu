@@ -394,3 +394,14 @@ button.chip.region { cursor: pointer; }
 @media (min-width: 960px) { .atlas { width: 100%; max-width: 1100px; margin: 0 auto; border-radius: 22px 22px 0 0; } }
 @media (max-height: 520px) and (orientation: landscape) { .atlas { gap: 5px; padding-top: 6px; } .atlas-info p { -webkit-line-clamp: 2; } }
 #map.atlas-focus .layers { opacity: .45; }
+
+/* ---------------------------------------------------------------- isimli harita */
+[data-mode="names"] .shape { fill: color-mix(in srgb, var(--c) 55%, var(--blank)); }
+[data-mode="names"] .shape.selected { fill: var(--c); }
+#map[data-labels="all"] .labels text {
+  /* ad ilin içine sığacak boyutta (harita birimi); yakınlaştırınca büyür ama ekranda 18px'i geçmez */
+  font-size: calc(min(var(--fs, 8) * 1px, 18px / var(--s, 1)));
+  stroke-width: calc(min(var(--fs, 8) * .24px, 4px / var(--s, 1)));
+  opacity: 1;
+  letter-spacing: -.01em;
+}
