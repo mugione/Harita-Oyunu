@@ -1,0 +1,15 @@
+{
+  "name": "harita-kasifi",
+  "version": "1.0.0",
+  "description": "Çocuklar için eğitici, kurulabilir (PWA) Türkiye haritası oyunu",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["türkiye", "harita", "eğitim", "çocuk", "oyun", "pwa", "coğrafya"],
+  "scripts": {
+    "dev": "cd public && python3 -m http.server 5173",
+    "build:map": "node scripts/build-map.mjs",
+    "build:banner": "node scripts/build-banner.mjs",
+    "deploy": "wrangler deploy"
+  }
+}

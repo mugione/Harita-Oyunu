@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Harita Kaşifi – Türkiye İlleri Oyunu</title>
+  <meta name="description" content="Çocuklar için eğitici Türkiye haritası oyunu: illeri bul, plakaları öğren, puan topla, iller hakkında bilgi edin.">
+  <meta name="theme-color" content="#3B5BFD">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Harita Kaşifi">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="modulepreload" href="js/app.js">
+</head>
+<body>
+<div id="app">
+
+  <!-- ANA MENÜ -->
+  <section id="home" class="screen active" aria-label="Ana menü">
+    <div class="home-inner">
+      <header class="brand">
+        <div class="brand-logo" aria-hidden="true">🧭</div>
+        <div>
+          <h1>Harita Kaşifi</h1>
+          <p class="tagline">Oyna, keşfet, öğren!</p>
+        </div>
+        <button class="icon-btn" id="btnSettings" aria-label="Ayarlar">⚙️</button>
+      </header>
+
+      <div class="map-picker" role="tablist" aria-label="Harita seç" id="mapPicker"></div>
+
+      <div class="stats-row" id="homeStats"></div>
+
+      <h2 class="section-title">Hangi bölge?</h2>
+      <div class="chips" id="regionChips"></div>
+
+      <div class="round-row">
+        <span>Soru sayısı</span>
+        <div class="seg" id="roundLen">
+          <button data-v="10">10</button><button data-v="20">20</button><button data-v="all">Hepsi</button>
+        </div>
+      </div>
+
+      <h2 class="section-title">Oyun seç</h2>
+      <div class="modes" id="modes"></div>
+
+      <button class="install-btn hidden" id="btnInstall">📲 Uygulama olarak yükle</button>
+      <p class="foot">Nüfus bilgileri yaklaşıktır (TÜİK 2023). Yüzölçümleri harita verisinden hesaplanmıştır.</p>
+    </div>
+  </section>
+
+  <!-- OYUN EKRANI -->
+  <section id="game" class="screen" aria-label="Oyun">
+    <header class="hud">
+      <button class="icon-btn" id="btnBack" aria-label="Menüye dön">←</button>
+      <div class="hud-title" id="hudTitle"></div>
+      <div class="hud-stats">
+        <div class="pill score" title="Puan">⭐ <b id="hudScore">0</b></div>
+        <div class="pill streak" title="Seri" id="hudStreakWrap">🔥 <b id="hudStreak">0</b></div>
+        <div class="pill progress" id="hudProgress"></div>
+      </div>
+    </header>
+
+    <div class="prompt" id="prompt">
+      <div class="prompt-text" id="promptText"></div>
+      <div class="prompt-actions">
+        <button class="small-btn" id="btnSpeak" aria-label="Sesli oku">🔊</button>
+        <button class="small-btn" id="btnHint" aria-label="İpucu">💡 İpucu</button>
+        <button class="small-btn" id="btnSkip" aria-label="Geç">⏭️</button>
+      </div>
+    </div>
+    <div class="progress-bar"><i id="progressBar"></i></div>
+
+    <div class="map-wrap" id="mapWrap">
+      <svg id="map" role="img" aria-label="Harita"></svg>
+      <div class="tooltip hidden" id="tooltip"></div>
+      <div class="zoom-ctl">
+        <button id="zIn" aria-label="Yakınlaştır">＋</button>
+        <button id="zOut" aria-label="Uzaklaştır">－</button>
+        <button id="zReset" aria-label="Haritayı sığdır">⤢</button>
+        <button id="zLabels" aria-label="Etiketler">Aa</button>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="feedback" id="feedback" aria-live="polite"></div>
+    </div>
+
+    <div class="choices hidden" id="choices"></div>
+
+    <aside class="sheet" id="info" aria-hidden="true">
+      <div class="sheet-handle"></div>
+      <button class="icon-btn sheet-close" id="infoClose" aria-label="Kapat">✕</button>
+      <div id="infoBody"></div>
+    </aside>
+  </section>
+
+  <!-- SONUÇ -->
+  <dialog id="result" class="modal">
+    <div class="modal-body" id="resultBody"></div>
+  </dialog>
+
+  <!-- AYARLAR -->
+  <dialog id="settings" class="modal">
+    <form method="dialog" class="modal-body">
+      <h2>⚙️ Ayarlar</h2>
+      <label class="toggle"><input type="checkbox" id="sInfo"><span>Keşfet modunda bilgi kartını aç</span></label>
+      <label class="toggle"><input type="checkbox" id="sInfoQuiz"><span>Doğru cevaptan sonra bilgi kartını aç</span></label>
+      <label class="toggle"><input type="checkbox" id="sVoice"><span>Sesli okuma (il adlarını söyle)</span></label>
+      <label class="toggle"><input type="checkbox" id="sSfx"><span>Ses efektleri</span></label>
+      <div class="set-row">
+        <span>Renkler</span>
+        <div class="seg" id="sColors"><button type="button" data-v="rainbow">Rengârenk</button><button type="button" data-v="region">Bölgelere göre</button></div>
+      </div>
+      <div class="set-row">
+        <span>Zorluk</span>
+        <div class="seg" id="sLevel"><button type="button" data-v="easy">Kolay</button><button type="button" data-v="normal">Normal</button><button type="button" data-v="hard">Zor</button></div>
+      </div>
+      <p class="hint-text" id="levelHelp"></p>
+      <div class="modal-actions">
+        <button type="button" class="ghost-btn" id="btnResetProgress">İlerlemeyi sıfırla</button>
+        <button class="primary-btn" value="ok">Tamam</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="confetti" id="confetti" aria-hidden="true"></div>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

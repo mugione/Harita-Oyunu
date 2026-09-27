@@ -1,0 +1,17 @@
+# Bağımlılıklar ve araç önbellekleri
+node_modules/
+.wrangler/
+
+# Gizli bilgiler – asla depoya koyma
+.env
+.env.*
+.dev.vars
+
+# Yerel editör / araç ayarları
+.claude/
+.vscode/
+.idea/
+
+# Sistem dosyaları
+.DS_Store
+Thumbs.db

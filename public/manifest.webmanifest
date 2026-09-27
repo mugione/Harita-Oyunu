@@ -1,0 +1,19 @@
+{
+  "name": "Harita Kaşifi – Türkiye İlleri Oyunu",
+  "short_name": "Harita Kaşifi",
+  "description": "Çocuklar için eğitici harita oyunu: illeri bul, plakaları öğren, puan topla.",
+  "lang": "tr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#EEF3FF",
+  "theme_color": "#3B5BFD",
+  "categories": ["education", "games", "kids"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
