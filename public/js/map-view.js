@@ -4,7 +4,7 @@ const NS = 'http://www.w3.org/2000/svg';
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export class MapView {
-  constructor(svg, { viewBox, shapes, items, colorOf, onTap, onHover }) {
+  constructor(svg, { viewBox, shapes, items, features = [], colorOf, onTap, onFeatureTap, onHover }) {
     this.svg = svg;
     this.bounds = { x: viewBox[0], y: viewBox[1], w: viewBox[2], h: viewBox[3] };
     this.vb = { ...this.bounds };
@@ -12,6 +12,9 @@ export class MapView {
     this.items = items;
     this.colorOf = colorOf;
     this.onTap = onTap;
+    this.onFeatureTap = onFeatureTap;
+    this.features = features;
+    this.featureEls = new Map();
     this.onHover = onHover;
     this.paths = new Map();
     this.labels = new Map();
@@ -55,7 +58,96 @@ export class MapView {
     const shadowWrap = document.createElementNS(NS, 'g');
     shadowWrap.setAttribute('filter', 'url(#shadow)');
     shadowWrap.append(this.gShapes);
-    this.svg.append(shadowWrap, this.gLabels);
+    this.gMarkers = document.createElementNS(NS, 'g');
+    this.gMarkers.setAttribute('class', 'markers');
+    this.svg.append(shadowWrap, this.renderLayers(), this.gMarkers, this.gLabels);
+  }
+
+  // Coğrafi katmanlar: göller, nehirler, dağlar, denizler (il şekillerinin üstünde, il etiketlerinin altında)
+  renderLayers() {
+    const root = document.createElementNS(NS, 'g');
+    root.setAttribute('class', 'layers');
+    const groups = {};
+    for (const t of ['sea', 'lake', 'river', 'mountain']) {
+      groups[t] = document.createElementNS(NS, 'g');
+      groups[t].setAttribute('class', 'layer layer-' + t);
+      root.append(groups[t]);
+    }
+    const mk = (tag, attrs, parent) => {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+      parent.append(e);
+      return e;
+    };
+    for (const f of this.features) {
+      const g = mk('g', { class: 'feature ' + f.type + (f.kind === 'Boğaz' ? ' strait' : ''), 'data-fid': f.id }, groups[f.type]);
+      g.style.setProperty('--lr', f.lr);
+      if (f.type === 'lake') {
+        mk('path', { d: f.d, class: 'lake-shape' }, g);
+        mk('text', { x: f.x, y: f.y, class: 'flabel' }, g).textContent = f.name.replace(/ (Gölü|Baraj Gölü)$/, '');
+      } else if (f.type === 'river') {
+        mk('path', { d: f.d, class: 'river-hit' }, g);
+        mk('path', { d: f.d, class: 'river-line' }, g);
+        mk('text', { x: f.x, y: f.y, class: 'flabel' }, g).textContent = f.name;
+      } else {
+        // Nokta işaretleri ekranda sabit boyutta çizilir (1 / ölçek)
+        const at = mk('g', { transform: `translate(${f.x} ${f.y})` }, g);
+        const pin = mk('g', { class: 'pin' }, at);
+        if (f.type === 'mountain') {
+          mk('path', { d: 'M0 -12L11 7H-11Z', class: 'peak-body' }, pin);
+          mk('path', { d: 'M0 -12L4.6 -4L2 -5.5L0 -3L-2 -5.5L-4.6 -4Z', class: 'peak-snow' }, pin);
+          mk('circle', { r: 16, class: 'pin-hit' }, pin);
+          mk('text', { y: 20, class: 'flabel' }, pin).textContent = f.name.replace(/ \(.*\)$/, '');
+        } else if (f.kind === 'Boğaz') {
+          mk('circle', { r: 5, class: 'strait-dot' }, pin);
+          mk('circle', { r: 14, class: 'pin-hit' }, pin);
+          mk('text', { y: 17, class: 'flabel' }, pin).textContent = f.name;
+        } else {
+          const t = mk('text', { class: 'sea-label' }, pin);
+          t.textContent = f.name;
+          if (f.rotate) t.setAttribute('transform', `rotate(${f.rotate})`);
+        }
+      }
+      this.featureEls.set(f.id, g);
+    }
+    return root;
+  }
+
+  // İllerin üzerine simge koy (ör. 🌰 fındık üreten iller). list: [{ id, text }]
+  setMarkers(list = []) {
+    this.gMarkers.innerHTML = '';
+    for (const { id, text } of list) {
+      const s = this.shapes[id]; if (!s) continue;
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('transform', `translate(${s.cx} ${s.cy})`);
+      const t = document.createElementNS(NS, 'text');
+      t.setAttribute('class', 'marker');
+      t.textContent = text;
+      g.append(t);
+      this.gMarkers.append(g);
+    }
+  }
+  // İli belirli bir renge boya (vurgulama ve bitki örtüsü haritası için)
+  paint(id, color) {
+    const p = this.paths.get(id); if (!p) return;
+    if (color) { p.style.setProperty('--hl', color); p.classList.add('painted'); }
+    else { p.style.removeProperty('--hl'); p.classList.remove('painted'); }
+  }
+  unpaintAll() { for (const id of this.paths.keys()) this.paint(id, null); }
+
+  // Görünür katman türleri: ör. ['lake', 'river']
+  setLayers(types) {
+    for (const t of ['mountain', 'lake', 'river', 'sea']) this.svg.classList.toggle('show-' + t, types.includes(t));
+  }
+  setFeature(fid, cls, on = true) { this.featureEls.get(fid)?.classList.toggle(cls, on); }
+  clearFeatures(...classes) { for (const e of this.featureEls.values()) e.classList.remove(...classes); }
+  fitFeature(fid, padRatio = 0.6, minW = 180) {
+    const e = this.featureEls.get(fid); if (!e) return;
+    const f = this.features.find(x => x.id === fid);
+    if (f.type === 'lake' || f.type === 'river') {
+      const b = e.querySelector('path').getBBox();
+      this.fitRect({ x: b.x, y: b.y, w: b.width, h: b.height }, padRatio, minW);
+    } else this.fitRect({ x: f.x - 1, y: f.y - 1, w: 2, h: 2 }, 0, minW * 1.4);
   }
 
   destroy() { this._ro?.disconnect(); cancelAnimationFrame(this._raf); }
@@ -113,11 +205,13 @@ export class MapView {
     const home = this.homeVb(), a = this.aspect(), b = this.bounds;
     v.w = clampN(v.w, home.w / 14, home.w * 1.05);
     v.h = v.w * a;
-    // Görünümün merkezi harita sınırları içinde kalsın
-    const minX = Math.min(b.x - v.w / 2 + v.w * 0.2, home.x), maxX = Math.max(b.x + b.w - v.w / 2 - v.w * 0.2, home.x);
-    const minY = Math.min(b.y - v.h / 2 + v.h * 0.2, home.y), maxY = Math.max(b.y + b.h - v.h / 2 - v.h * 0.2, home.y);
-    v.x = clampN(v.x, Math.min(minX, maxX), Math.max(minX, maxX));
-    v.y = clampN(v.y, Math.min(minY, maxY), Math.max(minY, maxY));
+    // Harita görünümden büyükse kenarlarda en fazla %8 boşluk kalsın; küçükse haritayı ortala
+    const axis = (pos, size, start, len) => {
+      if (size >= len * 1.16) return start + len / 2 - size / 2;
+      return clampN(pos, start - size * 0.08, start + len - size * 0.92);
+    };
+    v.x = axis(v.x, v.w, b.x, b.w);
+    v.y = axis(v.y, v.h, b.y, b.h);
     return v;
   }
   set view(v) {
@@ -170,8 +264,11 @@ export class MapView {
       x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
     }
     if (!isFinite(x0)) return this.reset();
-    const pw = (x1 - x0) * padRatio, ph = (y1 - y0) * padRatio;
-    let rect = { x: x0 - pw, y: y0 - ph, w: x1 - x0 + 2 * pw, h: y1 - y0 + 2 * ph };
+    this.fitRect({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, padRatio, minW);
+  }
+  fitRect(r, padRatio, minW) {
+    const pw = r.w * padRatio, ph = r.h * padRatio;
+    const rect = { x: r.x - pw, y: r.y - ph, w: r.w + 2 * pw, h: r.h + 2 * ph };
     if (rect.w < minW) { rect.x -= (minW - rect.w) / 2; rect.w = minW; }
     this.animateTo(this.clamp(this.contain(rect)));
   }
@@ -222,8 +319,9 @@ export class MapView {
       if (this.pointers.size < 2) this.pinch = null;
       if (this.pointers.size === 0) svg.classList.remove('dragging');
       if (e.type === 'pointerup' && !this.moved && this.pointers.size === 0) {
-        const id = this.idAt(e.clientX, e.clientY);
-        if (id != null) this.onTap?.(id);
+        const hit = this.hitAt(e.clientX, e.clientY);
+        if (hit?.fid) this.onFeatureTap?.(hit.fid);
+        else if (hit?.id != null) this.onTap?.(hit.id);
       }
     };
     svg.addEventListener('pointerup', end);
@@ -234,9 +332,12 @@ export class MapView {
     const [a, b] = [...this.pointers.values()];
     return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
   }
-  idAt(x, y) {
+  hitAt(x, y) {
     const el = document.elementFromPoint(x, y);
-    if (el?.classList?.contains('shape') && !el.classList.contains('off')) return Number(el.dataset.id);
+    const f = el?.closest?.('[data-fid]');
+    if (f) return { fid: f.dataset.fid };
+    if (el?.classList?.contains('shape') && !el.classList.contains('off')) return { id: Number(el.dataset.id) };
     return null;
   }
+  idAt(x, y) { return this.hitAt(x, y)?.id ?? null; }
 }

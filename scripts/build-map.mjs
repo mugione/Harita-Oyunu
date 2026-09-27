@@ -161,7 +161,7 @@ const result = {};
 for (const [id, v] of Object.entries(out)) result[id] = { ...v, neighbors: [...v.neighbors].sort((a, b) => a - b) };
 
 writeFileSync(new URL('../public/js/maps/tr-geo.js', import.meta.url),
-  `// Otomatik üretildi: node scripts/build-map.mjs\nexport const VIEWBOX = [0, 0, ${WIDTH}, ${HEIGHT}];\nexport const SHAPES = ${JSON.stringify(result)};\n`);
+  `// Otomatik üretildi: node scripts/build-map.mjs\nexport const VIEWBOX = [0, 0, ${WIDTH}, ${HEIGHT}];\n// Boylam/enlem -> harita koordinatı: x = pad + (lon - minLon) * cos * k, y = pad + (maxLat - lat) * k\nexport const PROJ = ${JSON.stringify({ minLon, maxLat, cos: Math.cos(LAT0), k, pad: PAD })};\nexport const SHAPES = ${JSON.stringify(result)};\n`);
 
 const sizes = Object.entries(result).sort((a, b) => b[1].area - a[1].area);
 console.log('viewBox', WIDTH, HEIGHT, 'bytes', JSON.stringify(result).length);

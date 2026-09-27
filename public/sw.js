@@ -1,10 +1,10 @@
 // Çevrimdışı çalışma için servis çalışanı
-const VERSION = 'v1';
+const VERSION = 'v5';
 const CACHE = `harita-kasifi-${VERSION}`;
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'js/app.js', 'js/map-view.js', 'js/sound.js',
-  'js/maps/index.js', 'js/maps/tr-geo.js', 'js/maps/tr-info.js',
+  'js/maps/index.js', 'js/maps/tr-geo.js', 'js/maps/tr-info.js', 'js/maps/tr-layers.js', 'js/maps/tr-layers-info.js', 'js/maps/tr-resources.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 

@@ -43,7 +43,9 @@ body {
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
 button:disabled { cursor: not-allowed; }
 .hidden { display: none !important; }
-#app { height: 100dvh; position: relative; overflow: hidden; }
+#app { height: 100dvh; position: relative; overflow: hidden; overflow: clip; }
+#game { overflow: clip; }
+.atlas-chips { position: relative; }
 
 .screen { position: absolute; inset: 0; display: none; }
 .screen.active { display: flex; flex-direction: column; animation: fadeIn .3s ease; }
@@ -271,8 +273,7 @@ button:disabled { cursor: not-allowed; }
 
 /* ---------------------------------------------------------------- geniş ekran düzeni */
 @media (min-width: 960px) {
-  #game { display: none; }
-  #game.active { display: grid; grid-template-columns: 1fr; grid-template-rows: auto auto auto 1fr auto; }
+  /* Esnek dikey düzen: gizlenen satırlar (ilerleme çubuğu, seçenekler, atlas) haritanın yerini kaydırmaz */
   .hud, .prompt, .progress-bar, .choices { width: 100%; max-width: 1100px; margin-left: auto; margin-right: auto; }
   .prompt { width: calc(100% - 24px); }
   .sheet { left: auto; top: 12px; right: 12px; bottom: 12px; width: 380px; max-height: none; border-radius: 26px; transform: translateX(110%); }
@@ -304,3 +305,92 @@ button:disabled { cursor: not-allowed; }
   #regionChips .chip { flex: none; }
   .round-row { margin-top: 12px; }
 }
+
+/* ---------------------------------------------------------------- coğrafi katmanlar */
+:root { --water: #3E9BF5; --water-fill: #7CC2FF; --peak: #8B5E3C; }
+.layer { display: none; }
+#map.show-mountain .layer-mountain, #map.show-lake .layer-lake,
+#map.show-river .layer-river, #map.show-sea .layer-sea { display: inline; }
+#map.layers-passive .layers { pointer-events: none; }
+.feature { cursor: pointer; }
+
+.lake-shape { fill: var(--water-fill); stroke: var(--water); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.river-line { fill: none; stroke: var(--water); stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.river-hit { fill: none; stroke: transparent; stroke-width: 14px; vector-effect: non-scaling-stroke; }
+.pin { transform: scale(calc(clamp(.5, var(--s, 1) * 1.3, 1) / var(--s, 1))); }
+.pin-hit { fill: transparent; }
+.peak-body { fill: var(--peak); stroke: #fff; stroke-width: 1.5px; stroke-linejoin: round; }
+.peak-snow { fill: #fff; }
+.strait-dot { fill: var(--water); stroke: #fff; stroke-width: 2px; }
+
+.flabel {
+  font-family: var(--display); font-weight: 800; fill: #0B4F9C; text-anchor: middle; dominant-baseline: central; pointer-events: none;
+  paint-order: stroke; stroke: rgba(255,255,255,.9); stroke-linejoin: round;
+}
+.lake .flabel, .river .flabel { font-size: calc(11px / var(--s, 1)); stroke-width: calc(3px / var(--s, 1)); }
+.lake .flabel { opacity: clamp(0, calc((var(--lr) * var(--s, 1) - 16) / 6), 1); }
+.river .flabel { font-style: italic; opacity: clamp(0, calc((var(--s, 1) - 1.3) * 3), 1); }
+.pin .flabel { font-size: 11px; stroke-width: 3px; opacity: clamp(0, calc((var(--s, 1) * var(--lr) / 10 - .62) * 4), 1); }
+.mountain .flabel { fill: #5A3A1E; }
+.sea-label {
+  font-family: var(--display); font-style: italic; font-weight: 700; font-size: 15px; letter-spacing: 3px; fill: #2F78C8; opacity: .85;
+  text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
+}
+.strait .flabel { fill: #0B4F9C; opacity: clamp(0, calc((var(--s, 1) - .8) * 3), 1); }
+#map.hide-flabels .flabel { display: none; }
+
+/* seçili / sorulan özellik */
+.feature.selected .lake-shape, .feature.target .lake-shape { fill: #FFD400; stroke: #E0A800; stroke-width: 2.5px; animation: glow 1s ease-in-out infinite; }
+.feature.selected .river-line, .feature.target .river-line { stroke: #FFB800; stroke-width: 5px; animation: glowLine 1s ease-in-out infinite; }
+.feature.selected .peak-body, .feature.target .peak-body { fill: #FFB800; }
+.feature.selected .pin, .feature.target .pin { transform: scale(calc(1.5 / var(--s, 1))); }
+.feature.target .pin-hit, .feature.selected .pin-hit { fill: rgba(255, 212, 0, .35); animation: pulse 1s infinite; }
+.feature.target .flabel, .feature.selected .flabel { opacity: 1; }
+@keyframes glowLine { 50% { stroke-width: 8px; filter: drop-shadow(0 0 5px #FFD400); } }
+.feature.target .river-line { stroke-dasharray: none; }
+
+.layer-menu {
+  position: absolute; right: 64px; bottom: 12px; z-index: 6; background: var(--card); border-radius: 18px; box-shadow: var(--shadow);
+  padding: 12px 16px; min-width: 230px; animation: modalIn .2s ease;
+}
+.layer-menu b { font-family: var(--display); font-size: 17px; }
+.layer-menu .toggle { padding: 8px 0; font-size: 14.5px; }
+.layer-menu .toggle:last-of-type { border-bottom: 0; }
+.layer-menu small { color: var(--muted); font-weight: 600; font-size: 12px; }
+
+.feature-head .feature-icon { font-size: 34px; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 16px; background: var(--bg); flex: none; }
+.info-grid + .info-grid { margin-top: -4px; }
+[data-mode="nature"] .shape { fill: color-mix(in srgb, var(--c) 55%, var(--blank)); }
+@media (max-height: 520px) and (orientation: landscape) { .zoom-ctl button { width: 36px; height: 36px; font-size: 17px; } }
+
+/* ---------------------------------------------------------------- zenginlikler atlası */
+[data-mode="atlas"] .shape, [data-mode="resources"] .shape { fill: color-mix(in srgb, var(--c) 30%, var(--blank)); }
+.shape.painted { fill: var(--hl) !important; }
+#map.atlas-focus .shape:not(.painted):not(.target):not(.hint) { opacity: .5; }
+.marker { font-size: calc(17px / var(--s, 1)); text-anchor: middle; dominant-baseline: central; pointer-events: none; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.35)); }
+
+.atlas { padding: 8px 12px max(10px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; background: var(--card); border-radius: 22px 22px 0 0; box-shadow: 0 -8px 24px -14px rgba(10,20,60,.35); }
+.atlas-tabs, .atlas-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 2px 12px; }
+.atlas-tabs::-webkit-scrollbar, .atlas-chips::-webkit-scrollbar { display: none; }
+.atlas-tabs button { flex: none; padding: 7px 12px; border-radius: 12px; font-weight: 800; font-size: 14px; color: var(--muted); background: var(--bg); }
+.atlas-tabs button.active { background: var(--ink); color: var(--card); }
+.atlas-chips .chip { flex: none; background: var(--bg); box-shadow: inset 0 0 0 2px transparent; }
+.atlas-chips .chip.active { background: color-mix(in srgb, var(--cc) 22%, var(--card)); box-shadow: inset 0 0 0 2px var(--cc); color: var(--ink); }
+.atlas-info { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; font-weight: 600; line-height: 1.4; min-height: 20px; }
+.atlas-info p { margin: 0; flex: 1; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.atlas-info .small-btn { flex: none; }
+.veg-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.veg-legend button { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13.5px; padding: 3px 0; }
+.veg-legend i { width: 14px; height: 14px; border-radius: 4px; }
+
+.eco .eco-line { display: grid; grid-template-columns: 118px 1fr; gap: 8px; align-items: start; padding: 6px 0; border-top: 1px dashed var(--line); }
+.eco .eco-line:first-of-type { border-top: 0; }
+.eco .eco-line > span { font-weight: 800; font-size: 13.5px; padding-top: 5px; }
+.eco .eco-line p { margin: 4px 0 0; font-size: 14px; }
+.eco .eco-line p.note, .note { grid-column: 2; color: var(--muted); font-size: 13px; font-weight: 600; margin: 4px 0 0; }
+.notes { margin: 0; padding-left: 18px; font-weight: 600; line-height: 1.5; }
+button.chip.region { cursor: pointer; }
+@media (max-width: 420px) { .eco .eco-line { grid-template-columns: 1fr; gap: 4px; } .eco .eco-line p.note { grid-column: 1; } }
+@media (min-width: 960px) { .atlas { width: 100%; max-width: 1100px; margin: 0 auto; border-radius: 22px 22px 0 0; } }
+@media (max-height: 520px) and (orientation: landscape) { .atlas { gap: 5px; padding-top: 6px; } .atlas-info p { -webkit-line-clamp: 2; } }
+#map.atlas-focus .layers { opacity: .45; }

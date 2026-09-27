@@ -10,7 +10,7 @@ const fmt = n => n.toLocaleString('tr-TR');
 // ---------------------------------------------------------------- kalıcı durum
 const STORE_KEY = 'harita-kasifi-v1';
 const DEFAULTS = {
-  settings: { infoExplore: true, infoQuiz: false, voice: true, sfx: true, colors: 'rainbow', level: 'normal', roundLen: '10', region: 'all', map: 'tr' },
+  settings: { infoExplore: true, infoQuiz: false, voice: true, sfx: true, colors: 'rainbow', level: 'normal', roundLen: '10', region: 'all', map: 'tr', layers: ['mountain', 'lake', 'river', 'sea'] },
   progress: {},
 };
 let store;
@@ -26,6 +26,9 @@ const MODES = [
   { id: 'identify',  icon: '❓', title: 'Bu Hangi İl?',   desc: 'Parlayan ilin adını seç.',                    color: '#A66CFF' },
   { id: 'plate',     icon: '🚗', title: 'Plaka Avı',      desc: 'Plaka numarasından ili bul.',                 color: '#FF8A3D', needs: 'codeLabel' },
   { id: 'neighbors', icon: '🤝', title: 'Komşular',       desc: 'Bir ilin bütün komşularını bul.',             color: '#22C1C3' },
+  { id: 'nature',    icon: '🏞️', title: 'Doğa Avı',       desc: 'Dağları, gölleri ve nehirleri tanı.',         color: '#2BA84A', needs: 'features' },
+  { id: 'atlas',     icon: '🧺', title: 'Zenginlikler Atlası', desc: 'Madenler, tarım ürünleri, bitki örtüsü nerede?', color: '#E0A020', needs: 'resources' },
+  { id: 'resources', icon: '⛏️', title: 'Kaynak Avı',     desc: 'Hangi ürün nerede yetişir, maden nerede çıkar?', color: '#C0622B', needs: 'resources' },
   { id: 'timed',     icon: '⏱️', title: 'Zamana Karşı',   desc: '60 saniyede kaç il bulabilirsin?',            color: '#FF5C8A' },
 ];
 const LEVEL_HELP = {
@@ -33,10 +36,11 @@ const LEVEL_HELP = {
   normal: 'Normal: 2 yanlıştan sonra bölge, 3 yanlıştan sonra doğru il gösterilir. 4 seçenek.',
   hard: 'Zor: Otomatik ipucu yok, harita renksiz başlar, seçenekler komşu illerden gelir.',
 };
+const CAT_COLORS = { maden: '#8E5CF7', enerji: '#FF7A1A', tarim: '#2EAA4A', hayvan: '#1E9BE0' };
 const RAINBOW = ['#FF6B6B', '#FFB020', '#3DBE6E', '#4F8CFF', '#A66CFF', '#FF5CA8', '#22C1C3', '#F57C3A'];
 
 // ---------------------------------------------------------------- uygulama durumu
-let mapDef, data, view, byId, colorMap = new Map();
+let mapDef, data, view, byId, byFid = new Map(), byRid = new Map(), colorMap = new Map();
 let game = null;
 let labelMode = 'none';
 
@@ -44,6 +48,8 @@ async function loadMap(id) {
   mapDef = MAPS[id];
   data = await mapDef.load();
   byId = new Map(data.items.map(i => [i.id, i]));
+  byFid = new Map((data.features || []).map(f => [f.id, f]));
+  byRid = new Map((data.resources || []).map(r => [r.id, r]));
   // Komşu iller farklı renk alsın diye açgözlü (greedy) graf boyama
   const order = [...data.items].sort((a, b) => b.neighbors.length - a.neighbors.length);
   const rainbow = new Map();
@@ -92,7 +98,7 @@ function renderHome() {
 
   const modes = $('#modes'); modes.innerHTML = '';
   for (const m of MODES) {
-    if (m.needs && !mapDef[m.needs]) continue;
+    if (m.needs && !mapDef[m.needs] && !data[m.needs]?.length) continue;
     const best = p.best[m.id];
     const b = el('button', { className: 'mode-card' }, `
       <span class="mode-icon" style="--mc:${m.color}">${m.icon}</span>
@@ -136,7 +142,15 @@ function startGame(modeId) {
   const len = store.settings.roundLen === 'all' ? items.length : Math.min(items.length, +store.settings.roundLen);
   let queue = shuffle(items);
   if (modeId === 'neighbors') queue = queue.filter(i => i.neighbors.length > 0);
-  if (modeId !== 'timed' && modeId !== 'explore') queue = queue.slice(0, len);
+  if (modeId === 'resources') {
+    const ids = new Set(items.map(i => i.id));
+    queue = shuffle(data.resources.filter(r => r.provinces.some(p => ids.has(p)))).slice(0, len);
+  }
+  if (modeId === 'nature') {
+    const ids = new Set(items.map(i => i.id));
+    queue = shuffle(data.features.filter(f => f.provinces?.some(p => ids.has(p))));
+  }
+  if (modeId !== 'timed' && modeId !== 'explore' && modeId !== 'atlas') queue = queue.slice(0, len);
 
   game = {
     mode, items, poolIds: new Set(items.map(i => i.id)), queue, index: -1, current: null,
@@ -146,9 +160,16 @@ function startGame(modeId) {
 
   show('game');
   $('#hudTitle').innerHTML = `<span>${mode.icon}</span> ${mode.title}`;
-  $('#hudStreakWrap').classList.toggle('hidden', modeId === 'explore');
-  $('#btnHint').classList.toggle('hidden', modeId === 'explore' || modeId === 'identify');
-  $('#btnSkip').classList.toggle('hidden', modeId === 'explore');
+  const free = modeId === 'explore' || modeId === 'atlas';
+  $('#hudStreakWrap').classList.toggle('hidden', free);
+  $('#hudScore').parentElement.classList.toggle('hidden', modeId === 'atlas');
+  $('#hudProgress').classList.toggle('hidden', modeId === 'atlas');
+  document.querySelector('.progress-bar').classList.toggle('hidden', modeId === 'atlas');
+  $('#btnHint').classList.toggle('hidden', free || modeId === 'identify');
+  $('#btnSkip').classList.toggle('hidden', free);
+  $('#atlas').classList.toggle('hidden', modeId !== 'atlas');
+  $('#zLayers').classList.toggle('hidden', !data.features?.length);
+  $('#layerMenu').classList.add('hidden');
   $('#choices').classList.toggle('hidden', modeId !== 'identify');
   document.body.dataset.mode = modeId;
   document.body.dataset.level = store.settings.level;
@@ -159,14 +180,15 @@ function startGame(modeId) {
   oldSvg.replaceWith(svg);
   view?.destroy();
   view = new MapView(svg, {
-    viewBox: data.viewBox, shapes: data.shapes, items: data.items, colorOf,
-    onTap: handleTap, onHover: handleHover,
+    viewBox: data.viewBox, shapes: data.shapes, items: data.items, features: data.features, colorOf,
+    onTap: handleTap, onFeatureTap: handleFeatureTap, onHover: handleHover,
   });
   if (modeId !== 'neighbors') for (const it of data.items) if (!game.poolIds.has(it.id)) view.set(it.id, 'off');
   if (modeId === 'explore') for (const id of prog().discovered) if (game.poolIds.has(id)) { view.set(id, 'found'); game.found.add(id); }
   if (store.settings.region !== 'all') setTimeout(() => view.fitIds([...game.poolIds], 0.08, 100), 60);
 
-  labelMode = modeId === 'explore' ? 'none' : (store.settings.level === 'hard' ? 'none' : 'found');
+  applyLayers();
+  labelMode = ['explore', 'nature', 'atlas', 'resources'].includes(modeId) ? 'none' : (store.settings.level === 'hard' ? 'none' : 'found');
   refreshLabels();
   renderLegend();
   updateHud();
@@ -193,10 +215,14 @@ function renderLegend() {
 
 function next() {
   const g = game;
-  view.clear('target', 'hint', 'region-hint', 'selected', 'wrong', 'center');
+  view.clear('target', 'hint', 'region-hint', 'selected', 'wrong', 'center', 'peek');
+  view.clearFeatures('target', 'selected');
+  view.unpaintAll(); view.setMarkers([]); $('#map').classList.remove('atlas-focus');
+  $('#choices').classList.toggle('hidden', g.mode.id !== 'identify');
   $('#feedback').className = 'feedback';
   g.wrongTries = 0; g.hintLevel = 0; g.locked = false; g.neighborFound = new Set();
 
+  if (g.mode.id === 'atlas') return atlasStart();
   if (g.mode.id === 'explore') {
     setPrompt(`Bir ${mapDef.itemNoun}e dokun ve keşfet! <small>(${g.found.size}/${g.items.length})</small>`);
     return;
@@ -222,6 +248,12 @@ function next() {
       setPrompt('Parlayan il hangisi?', 'Parlayan il hangisi?');
       renderChoices();
       break;
+    case 'nature':
+      natureQuestion(c);
+      break;
+    case 'resources':
+      resQuestion(c);
+      break;
     case 'neighbors':
       view.set(c.id, 'center'); view.bringToFront(c.id);
       view.fitIds([c.id, ...c.neighbors], 0.12, 220);
@@ -244,6 +276,7 @@ function updateHud() {
   $('#hudScore').textContent = fmt(g.score);
   $('#hudStreak').textContent = g.streak;
   let txt = '', pct = 0;
+  if (g.mode.id === 'atlas') return;
   if (g.mode.id === 'explore') { txt = `${g.found.size}/${g.items.length}`; pct = g.found.size / g.items.length; }
   else if (g.mode.id === 'timed') { txt = `⏳ ${g.timeLeft}s`; pct = g.timeLeft / 60; }
   else { txt = `${Math.min(g.index + 1, g.queue.length)}/${g.queue.length}`; pct = g.index / g.queue.length; }
@@ -275,7 +308,10 @@ function handleTap(id) {
   const g = game;
   if (!g || g.locked) return;
   const item = byId.get(id);
-  if (!g.poolIds.has(id) && g.mode.id !== 'neighbors') return;
+  if (!g.poolIds.has(id) && !['neighbors', 'nature', 'resources'].includes(g.mode.id)) return;
+  if (g.mode.id === 'nature') return natureTap(item);
+  if (g.mode.id === 'resources') return resTap(item);
+  if (g.mode.id === 'atlas') { sfx.play('tap'); voice.say(item.name); view.flash(item.id, 'peek', 1200); return openInfo(item); }
 
   if (g.mode.id === 'explore') return exploreTap(item);
   if (g.mode.id === 'identify') {
@@ -445,6 +481,481 @@ function renderChoices() {
   }
 }
 
+// ---------------------------------------------------------------- coğrafi katmanlar
+function visibleLayers() {
+  // Doğa Avı'nda bütün katmanlar açık; diğer modlarda kullanıcının seçimi geçerli
+  return game?.mode.id === 'nature' ? Object.keys(data.layerTypes || {}) : store.settings.layers;
+}
+function applyLayers() {
+  if (!view) return;
+  view.setLayers(visibleLayers());
+  const svg = $('#map');
+  // Yalnızca Keşfet modunda katmanlara dokunulabilir; oyunlarda dokunuşlar alttaki ile gider
+  svg.classList.toggle('layers-passive', game?.mode.id !== 'explore');
+  svg.classList.toggle('hide-flabels', game?.mode.id === 'nature');
+}
+function renderLayerMenu() {
+  const menu = $('#layerMenu');
+  menu.innerHTML = '<b>Katmanlar</b>' + Object.entries(data.layerTypes).map(([t, lt]) =>
+    `<label class="toggle"><input type="checkbox" data-layer="${t}" ${store.settings.layers.includes(t) ? 'checked' : ''} ${game?.mode.id === 'nature' ? 'disabled' : ''}><span>${lt.icon} ${lt.name}</span></label>`).join('')
+    + (game?.mode.id === 'nature' ? '<small>Doğa Avı\'nda bütün katmanlar açıktır.</small>' : '');
+  menu.querySelectorAll('[data-layer]').forEach(cb => cb.onchange = () => {
+    const set = new Set(store.settings.layers);
+    cb.checked ? set.add(cb.dataset.layer) : set.delete(cb.dataset.layer);
+    store.settings.layers = [...set]; save(); applyLayers();
+  });
+}
+
+const typeOne = f => f.kind || data.layerTypes[f.type].one;
+const cap = s => s.charAt(0).toLocaleUpperCase('tr') + s.slice(1);
+
+function handleFeatureTap(fid) {
+  const g = game, f = byFid.get(fid);
+  if (!g || !f || g.mode.id !== 'explore') return;
+  sfx.play('tap');
+  voice.say(f.name);
+  view.clearFeatures('selected'); view.clear('selected', 'peek');
+  view.setFeature(fid, 'selected');
+  for (const p of f.provinces || []) view.set(p, 'peek');
+  const lt = data.layerTypes[f.type];
+  setPrompt(`${lt.icon} <b>${f.name}</b> <small>${cap(typeOne(f))}</small>`);
+  if (store.settings.infoExplore) openFeatureInfo(f);
+  else feedback(`${lt.icon} <b>${f.name}</b> <button class="fb-info" data-fid="${f.id}">ℹ️ Bilgi</button>`, 'info');
+}
+
+function natureQuestion(f) {
+  const g = game, lvl = store.settings.level;
+  const sameType = data.features.filter(x => x.type === f.type && x.id !== f.id && (x.kind || '') === (f.kind || ''));
+  // Soru tipi: "hangi ilde?" (haritaya dokun) ya da "bu hangisi?" (seçenekten seç)
+  g.qType = sameType.length >= 3 && Math.random() < 0.5 ? 'name' : 'where';
+  g.neighborFound = new Set();
+  if (g.qType === 'where' && lvl !== 'hard') view.setFeature(f.id, 'target');
+  if (g.qType === 'name') view.setFeature(f.id, 'target');
+  view.fitFeature(f.id, 0.8, g.qType === 'name' ? 260 : 420);
+  const one = typeOne(f), lt = data.layerTypes[f.type];
+  if (g.qType === 'where') {
+    const q = f.type === 'river' ? `<b>${f.name}</b> hangi illerden geçer? <small>Birine dokun!</small>`
+      : `<b>${f.name}</b> hangi ilde?${f.provinces.length > 1 ? ' <small>Birine dokun!</small>' : ''}`;
+    setPrompt(`${lt.icon} ${q}`, f.type === 'river' ? `${f.name} hangi illerden geçer?` : `${f.name} hangi ilde?`);
+  } else {
+    setPrompt(`${lt.icon} Parlayan ${one} hangisi?`, `Parlayan ${one} hangisi?`);
+    const n = lvl === 'easy' ? 3 : 4;
+    const opts = shuffle([f, ...shuffle(sameType).slice(0, n - 1)]);
+    const box = $('#choices'); box.innerHTML = ''; box.classList.remove('hidden');
+    for (const o of opts) {
+      const b = el('button', { className: 'choice' }, o.name);
+      b.onclick = () => {
+        if (g.locked) return;
+        if (o.id === f.id) { b.classList.add('ok'); natureCorrect(f); }
+        else {
+          b.classList.add('no'); b.disabled = true;
+          g.wrongTries++; g.streak = 0; sfx.play('wrong');
+          feedback(`❌ Hayır, bu <b>${o.name}</b> değil.`, 'bad');
+          if (g.wrongTries >= n - 1) {
+            box.querySelectorAll('.choice').forEach(x => { if (x.textContent === f.name) x.classList.add('ok'); });
+            natureReveal(f, `Doğrusu <b>${f.name}</b>.`);
+          }
+          updateHud();
+        }
+      };
+      box.append(b);
+    }
+  }
+}
+
+function natureTap(item) {
+  const g = game, f = g.current;
+  if (g.qType === 'name') { feedback('Aşağıdaki seçeneklerden birini seç 👇', 'info'); return; }
+  if (f.provinces.includes(item.id)) return natureCorrect(f, item);
+  g.wrongTries++; g.streak = 0;
+  sfx.play('wrong'); view.flash(item.id, 'wrong', 900);
+  if (navigator.vibrate) navigator.vibrate(60);
+  const lvl = store.settings.level;
+  const hintAt = lvl === 'easy' ? 1 : lvl === 'normal' ? 2 : 99, revealAt = lvl === 'easy' ? 2 : 3;
+  let msg = `❌ Bu <b>${item.name}</b>. ${cap(typeOne(f))} burada değil.`;
+  if (g.wrongTries >= hintAt) { view.setFeature(f.id, 'target'); g.hintLevel = Math.max(g.hintLevel, 1); msg += ' <small>İpucu: parlayan yere bak!</small>'; }
+  if (g.wrongTries >= revealAt) return natureReveal(f, msg);
+  feedback(msg, 'bad');
+  updateHud();
+}
+
+function natureCorrect(f, tapped) {
+  const g = game;
+  g.locked = true;
+  const firstTry = g.wrongTries === 0 && g.hintLevel === 0;
+  g.streak = firstTry ? g.streak + 1 : 0;
+  g.bestStreak = Math.max(g.bestStreak, g.streak);
+  const pts = points();
+  g.score += pts;
+  if (firstTry) g.correct++; else g.missed.add('f:' + f.id);
+  const p = prog(); p.fmastery ||= {}; p.fmastery[f.id] = Math.max(0, (p.fmastery[f.id] || 0) + (firstTry ? 1 : -1)); save();
+  view.setFeature(f.id, 'target');
+  for (const pid of f.provinces) view.set(pid, 'peek');
+  if (tapped) view.flash(tapped.id, 'correct', 900);
+  sfx.play(g.streak > 0 && g.streak % 5 === 0 ? 'streak' : 'correct');
+  const where = f.provinces.map(pid => byId.get(pid).name).join(', ');
+  feedback(`✅ <b>${f.name}</b> +${pts}${where ? ` <small>📍 ${where}</small>` : ''} <button class="fb-info" data-fid="${f.id}">ℹ️ Bilgi</button>`, 'good');
+  voice.say(`Harika! ${f.name}`);
+  updateHud();
+  if (store.settings.infoQuiz) { openFeatureInfo(f, { resume: true }); return; }
+  setTimeout(() => { if (game === g) next(); }, 2000);
+}
+
+function natureReveal(f, msg) {
+  const g = game;
+  g.locked = true; g.missed.add('f:' + f.id);
+  const p = prog(); p.fmastery ||= {}; p.fmastery[f.id] = Math.max(0, (p.fmastery[f.id] || 0) - 1); save();
+  view.setFeature(f.id, 'target');
+  for (const pid of f.provinces) view.set(pid, 'hint');
+  const where = f.provinces.map(pid => byId.get(pid).name).join(', ');
+  feedback(`${msg} <small>${f.name}: ${where}</small> <button class="fb-info" data-fid="${f.id}">ℹ️ Bilgi</button>`, 'bad');
+  voice.say(`${f.name}, ${where}`);
+  setTimeout(() => { if (game === g) { view.clear('hint'); next(); } }, 2600);
+}
+
+function openFeatureInfo(f, { resume = false } = {}) {
+  const lt = data.layerTypes[f.type];
+  const tiles = [];
+  if (f.elev) tiles.push(['⛰️', `${fmt(f.elev)} m`, 'Yükseklik']);
+  if (f.area) tiles.push(['📐', `~${fmt(f.area)} km²`, 'Yüzölçümü']);
+  if (f.length) tiles.push(['📏', `~${fmt(f.length)} km`, 'Uzunluk']);
+  if (f.sea) tiles.push(['🌊', f.sea, 'Döküldüğü yer']);
+  if (f.provinces?.length) tiles.push(['📍', f.provinces.length, f.type === 'river' ? 'Geçtiği il' : 'İl']);
+  // Aynı türdeki sıralama (en yüksek dağ, en büyük göl, en uzun nehir)
+  const key = f.elev ? 'elev' : f.area ? 'area' : f.length ? 'length' : null;
+  if (key) {
+    const rank = data.features.filter(x => x.type === f.type && x[key]).sort((a, b) => b[key] - a[key]).findIndex(x => x.id === f.id) + 1;
+    const word = { elev: 'en yüksek', area: 'en büyük', length: 'en uzun' }[key];
+    tiles.push(['🏅', `${rank}.`, `Listedeki ${word} ${lt.one}`]);
+  }
+  const provs = (f.provinces || []).map(pid => byId.get(pid)).sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+  $('#infoBody').innerHTML = `
+    <div class="info-head feature-head">
+      <span class="feature-icon">${lt.icon}</span>
+      <div><h3>${f.name}</h3><span class="chip region">${cap(typeOne(f))}</span></div>
+      <button class="small-btn" id="infoSpeak" aria-label="Kartı sesli oku">🔊</button>
+    </div>
+    <div class="info-grid">${tiles.slice(0, 3).map(([i, b, s]) => `<div class="fact-tile"><span>${i}</span><b>${b}</b><small>${s}</small></div>`).join('')}</div>
+    ${tiles.length > 3 ? `<div class="info-grid">${tiles.slice(3, 6).map(([i, b, s]) => `<div class="fact-tile"><span>${i}</span><b>${b}</b><small>${s}</small></div>`).join('')}</div>` : ''}
+    <div class="info-row did-you-know"><h4>💡 Biliyor muydun?</h4><p>${f.fact}</p></div>
+    ${provs.length ? `<div class="info-row"><h4>🗺️ ${f.type === 'river' ? 'Geçtiği iller' : 'Bulunduğu il' + (provs.length > 1 ? 'ler' : '')}</h4><div class="chips small">${provs.map(p => `<button class="chip" data-prov="${p.id}">${p.name}</button>`).join('')}</div></div>` : ''}
+    ${resume ? '<button class="primary-btn wide" id="infoContinue">Devam et →</button>' : ''}`;
+  $('#infoSpeak').onclick = () => voice.say(`${f.name}. ${f.fact}`, { force: true });
+  $('#infoBody').querySelectorAll('[data-prov]').forEach(b => b.onclick = () => {
+    const it = byId.get(+b.dataset.prov);
+    view.flash(it.id, 'peek', 1400);
+    if (game?.mode.id === 'explore') exploreTap(it); else openInfo(it, { resume });
+  });
+  if (resume) $('#infoContinue').onclick = () => { closeInfo(); next(); };
+  showSheet(resume);
+}
+
+function showSheet(resume) {
+  const sheet = $('#info');
+  sheet.classList.add('open'); sheet.setAttribute('aria-hidden', 'false');
+  sheet.dataset.resume = resume ? '1' : '';
+  sheet.scrollTop = 0;
+}
+
+// ---------------------------------------------------------------- zenginlikler: ortak yardımcılar
+const resOf = id => (data.resources || []).filter(r => r.provinces.includes(id));
+const verbOf = r => r.verb || data.resourceCats[r.cat].verb;
+const VERB_ADJ = { 'çıkarılır': 'çıkarıldığı', 'üretilir': 'üretildiği', 'yetişir': 'yetiştiği', 'yapılır': 'yapıldığı' };
+const names = ids => ids.map(id => byId.get(id).name).join(', ');
+
+function economyRow(item) {
+  if (!data.resources) return '';
+  const rs = resOf(item.id);
+  const rows = Object.entries(data.resourceCats).map(([cat, c]) => {
+    const list = rs.filter(r => r.cat === cat);
+    return list.length ? `<div class="eco-line"><span>${c.icon} ${c.name}</span><div class="chips small">${list.map(r => `<button class="chip" data-res="${r.id}">${r.icon} ${r.name}</button>`).join('')}</div></div>` : '';
+  }).join('');
+  const vt = data.vegTypes[item.vegetation];
+  return `<div class="info-row eco"><h4>🧺 Zenginlikleri</h4>${rows}
+    ${item.industry ? `<div class="eco-line"><span>🏭 Sanayi</span><p>${item.industry}</p></div>` : ''}
+    ${vt ? `<div class="eco-line"><span>🌳 Bitki örtüsü</span><div class="chips small"><button class="chip" data-veg="${item.vegetation}"><i style="background:${vt.color}"></i>${vt.name}</button></div>${item.vegetationNote ? `<p class="note">🌸 ${item.vegetationNote}</p>` : ''}</div>` : ''}
+  </div>`;
+}
+
+// Kartlardaki bağlantılar: ürün, bitki örtüsü, bölge, il
+function bindCardLinks(resume) {
+  const body = $('#infoBody');
+  body.querySelectorAll('[data-res]').forEach(b => b.onclick = () => {
+    if (game?.mode.id === 'atlas') atlasSelect('res', b.dataset.res, { card: true });
+    else openResourceInfo(byRid.get(b.dataset.res), { resume });
+  });
+  body.querySelectorAll('[data-veg]').forEach(b => b.onclick = () => {
+    if (game?.mode.id === 'atlas') atlasSelect('veg', b.dataset.veg, { card: true }); else openVegInfo(b.dataset.veg, { resume });
+  });
+  body.querySelectorAll('[data-region]').forEach(b => b.onclick = () => {
+    if (game?.mode.id === 'atlas') atlasSelect('region', b.dataset.region, { card: true }); else openRegionInfo(b.dataset.region, { resume });
+  });
+  body.querySelectorAll('[data-prov]').forEach(b => b.onclick = () => {
+    const it = byId.get(+b.dataset.prov);
+    view.flash(it.id, 'peek', 1400);
+    if (game?.mode.id === 'explore') exploreTap(it); else openInfo(it, { resume });
+  });
+}
+const provChips = ids => `<div class="chips small">${ids.map(id => byId.get(id)).sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(p => `<button class="chip" data-prov="${p.id}">${p.name}</button>`).join('')}</div>`;
+function card(html, resume) {
+  $('#infoBody').innerHTML = html + (resume ? '<button class="primary-btn wide" id="infoContinue">Devam et →</button>' : '');
+  bindCardLinks(resume);
+  if (resume) $('#infoContinue').onclick = () => { closeInfo(); next(); };
+  showSheet(resume);
+}
+const cardHead = (icon, bg, title, chip) => `
+  <div class="info-head feature-head"><span class="feature-icon" style="background:${bg}">${icon}</span>
+    <div><h3>${title}</h3>${chip}</div>
+    <button class="small-btn" id="infoSpeak" aria-label="Kartı sesli oku">🔊</button></div>`;
+
+function openResourceInfo(r, { resume = false } = {}) {
+  const c = data.resourceCats[r.cat];
+  const regionIds = [...new Set(r.provinces.map(p => byId.get(p).region))];
+  card(`
+    ${cardHead(r.icon, CAT_COLORS[r.cat] + '22', r.name, `<span class="chip region" style="box-shadow:inset 0 0 0 2px ${CAT_COLORS[r.cat]}">${c.icon} ${c.name}</span>`)}
+    <div class="info-row did-you-know"><h4>💡 Biliyor muydun?</h4><p>${r.info}</p></div>
+    <div class="info-row"><h4>📍 Başlıca ${VERB_ADJ[verbOf(r)] || ''} iller</h4>${provChips(r.provinces)}</div>
+    <div class="info-row"><h4>🗺️ Bölgeler</h4><div class="chips small">${regionIds.map(id => `<button class="chip" data-region="${id}"><i style="background:${data.regions[id].color}"></i>${data.regions[id].name}</button>`).join('')}</div></div>
+    <p class="note">Liste bütün illeri değil, en bilinen merkezleri gösterir.</p>`, resume);
+  $('#infoSpeak').onclick = () => voice.say(`${r.name}. ${r.info}`, { force: true });
+}
+
+function openVegInfo(type, { resume = false } = {}) {
+  const v = data.vegTypes[type];
+  const provs = data.items.filter(i => i.vegetation === type);
+  const notes = provs.filter(i => i.vegetationNote);
+  card(`
+    ${cardHead(v.icon, v.color + '33', v.name, `<span class="chip region"><i style="background:${v.color}"></i>Bitki örtüsü</span>`)}
+    <div class="info-row did-you-know"><h4>💡 Nasıl bir yer?</h4><p>${v.info}</p></div>
+    <div class="info-row"><h4>🌱 Tipik bitkiler</h4><p>${v.trees}</p></div>
+    ${notes.length ? `<div class="info-row"><h4>🌸 Dikkat çeken bitkiler</h4><ul class="notes">${notes.map(i => `<li><b>${i.name}:</b> ${i.vegetationNote}</li>`).join('')}</ul></div>` : ''}
+    <div class="info-row"><h4>📍 Baskın olduğu iller (${provs.length})</h4>${provChips(provs.map(p => p.id))}</div>`, resume);
+  $('#infoSpeak').onclick = () => voice.say(`${v.name}. ${v.info}`, { force: true });
+}
+
+function openRegionInfo(rid, { resume = false } = {}) {
+  const r = data.regions[rid];
+  const provs = data.items.filter(i => i.region === rid);
+  const pop = provs.reduce((s, i) => s + i.pop, 0), area = provs.reduce((s, i) => s + i.area, 0);
+  const top = (data.resources || []).map(res => ({ res, n: res.provinces.filter(p => byId.get(p).region === rid).length }))
+    .filter(x => x.n).sort((a, b) => b.n - a.n).slice(0, 14);
+  card(`
+    ${cardHead('🗺️', r.color + '33', r.name, `<span class="chip region"><i style="background:${r.color}"></i>Coğrafi bölge</span>`)}
+    <div class="info-grid">
+      <div class="fact-tile"><span>🏙️</span><b>${provs.length}</b><small>İl</small></div>
+      <div class="fact-tile"><span>👥</span><b>~${(pop / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} mn</b><small>Nüfus</small></div>
+      <div class="fact-tile"><span>📐</span><b>~${fmt(Math.round(area / 1000))} bin km²</b><small>Yüzölçümü</small></div>
+    </div>
+    ${r.climate ? `<div class="info-row"><h4>🌦️ İklim</h4><p>${r.climate}</p></div>` : ''}
+    ${r.vegetation ? `<div class="info-row"><h4>🌳 Bitki örtüsü</h4><p>${r.vegetation}</p></div>` : ''}
+    ${r.economy ? `<div class="info-row"><h4>🏭 Ekonomi</h4><p>${r.economy}</p></div>` : ''}
+    ${r.fact ? `<div class="info-row did-you-know"><h4>💡 Biliyor muydun?</h4><p>${r.fact}</p></div>` : ''}
+    ${top.length ? `<div class="info-row"><h4>🧺 Başlıca zenginlikleri</h4><div class="chips small">${top.map(({ res }) => `<button class="chip" data-res="${res.id}">${res.icon} ${res.name}</button>`).join('')}</div></div>` : ''}
+    <div class="info-row"><h4>📍 İlleri</h4>${provChips(provs.map(p => p.id))}</div>`, resume);
+  $('#infoSpeak').onclick = () => voice.say(`${r.name} Bölgesi. ${r.climate || ''} ${r.economy || ''}`, { force: true });
+}
+
+function showResourceOnMap(r, fit = true) {
+  view.unpaintAll();
+  for (const p of r.provinces) view.paint(p, CAT_COLORS[r.cat]);
+  view.setMarkers(r.provinces.map(id => ({ id, text: r.icon })));
+  $('#map').classList.add('atlas-focus');
+  if (fit) view.fitIds(r.provinces, 0.2, 320);
+}
+
+// ---------------------------------------------------------------- 🧺 zenginlikler atlası
+const atlasTabs = () => [
+  ...Object.entries(data.resourceCats).map(([id, c]) => ({ id, name: c.name, icon: c.icon })),
+  { id: 'veg', name: 'Bitki örtüsü', icon: '🌳' },
+  { id: 'region', name: 'Bölgeler', icon: '🗺️' },
+];
+function atlasStart() {
+  game.atlasTab ||= 'tarim';
+  renderAtlasTabs();
+  $('#atlasInfo').innerHTML = '<p>👆 Yukarıdan bir konu, sonra bir ürün seç. Haritada parlayan illere dokunarak ayrıntıları gör.</p>';
+  setPrompt('🧺 Bir ürün, maden ya da bitki örtüsü seç; haritada nerede olduğunu gör!');
+}
+function renderAtlasTabs() {
+  const tabs = $('#atlasTabs');
+  tabs.innerHTML = atlasTabs().map(t => `<button class="${t.id === game.atlasTab ? 'active' : ''}" data-tab="${t.id}">${t.icon} ${t.name}</button>`).join('');
+  tabs.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { game.atlasTab = b.dataset.tab; renderAtlasTabs(); sfx.play('tap'); });
+  const t = game.atlasTab;
+  let list;
+  if (t === 'veg') list = [{ kind: 'veg', id: 'all', icon: '🎨', name: 'Hepsi', color: '#8892b0' }, ...Object.entries(data.vegTypes).map(([id, v]) => ({ kind: 'veg', id, icon: v.icon, name: v.name, color: v.color }))];
+  else if (t === 'region') list = Object.entries(data.regions).map(([id, r]) => ({ kind: 'region', id, icon: '', name: r.name, color: r.color }));
+  else list = data.resources.filter(r => r.cat === t).map(r => ({ kind: 'res', id: r.id, icon: r.icon, name: r.name, color: CAT_COLORS[r.cat] }));
+  const chips = $('#atlasChips');
+  chips.innerHTML = list.map(x => `<button class="chip ${game.atlasSel === x.kind + ':' + x.id ? 'active' : ''}" data-kind="${x.kind}" data-id="${x.id}" style="--cc:${x.color}">${x.icon ? `<span>${x.icon}</span>` : `<i style="background:${x.color}"></i>`}${x.name}</button>`).join('');
+  chips.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => atlasSelect(b.dataset.kind, b.dataset.id));
+}
+function atlasSelect(kind, id, { card: openCard = false } = {}) {
+  const g = game;
+  g.atlasSel = kind + ':' + id;
+  g.atlasTab = kind === 'res' ? byRid.get(id).cat : kind;
+  renderAtlasTabs();
+  // Seçili çipi yalnızca çip şeridi içinde ortala (scrollIntoView tüm sayfayı da kaydırıyordu)
+  const strip = $('#atlasChips'), active = strip.querySelector('.chip.active');
+  if (active) strip.scrollTo({ left: active.offsetLeft - strip.clientWidth / 2 + active.offsetWidth / 2, behavior: 'smooth' });
+  sfx.play('tap');
+  const svg = $('#map'), info = $('#atlasInfo');
+  view.unpaintAll(); view.setMarkers([]); svg.classList.remove('atlas-focus');
+  const more = fn => { info.querySelector('[data-more]').onclick = fn; if (openCard) fn(); };
+  if (kind === 'res') {
+    const r = byRid.get(id);
+    showResourceOnMap(r);
+    voice.say(r.name);
+    setPrompt(`${r.icon} <b>${r.name}</b> <small>${r.provinces.length} il</small>`);
+    info.innerHTML = `<p>${r.info}</p><button class="small-btn" data-more>ℹ️ Detay</button>`;
+    more(() => openResourceInfo(r));
+  } else if (kind === 'veg' && id === 'all') {
+    for (const it of data.items) if (it.vegetation) view.paint(it.id, data.vegTypes[it.vegetation].color);
+    view.animateTo(view.clamp(view.startVb()));
+    voice.say('Türkiye\'nin bitki örtüsü');
+    setPrompt('🌳 <b>Türkiye\'nin bitki örtüsü</b> <small>Her renk bir bitki örtüsü türü</small>');
+    info.innerHTML = `<div class="veg-legend">${Object.entries(data.vegTypes).map(([k, v]) => `<button data-veg-pick="${k}"><i style="background:${v.color}"></i>${v.name}</button>`).join('')}</div>`;
+    info.querySelectorAll('[data-veg-pick]').forEach(b => b.onclick = () => atlasSelect('veg', b.dataset.vegPick));
+  } else if (kind === 'veg') {
+    const v = data.vegTypes[id];
+    const ids = data.items.filter(i => i.vegetation === id).map(i => i.id);
+    for (const p of ids) view.paint(p, v.color);
+    view.setMarkers(ids.map(p => ({ id: p, text: v.icon })));
+    svg.classList.add('atlas-focus');
+    view.fitIds(ids, 0.1, 320);
+    voice.say(v.name);
+    setPrompt(`${v.icon} <b>${v.name}</b> <small>${ids.length} ilde baskın</small>`);
+    info.innerHTML = `<p>${v.info} <b>Tipik bitkiler:</b> ${v.trees}.</p><button class="small-btn" data-more>ℹ️ Detay</button>`;
+    more(() => openVegInfo(id));
+  } else if (kind === 'region') {
+    const r = data.regions[id];
+    const ids = data.items.filter(i => i.region === id).map(i => i.id);
+    for (const p of ids) view.paint(p, r.color);
+    svg.classList.add('atlas-focus');
+    view.fitIds(ids, 0.08, 320);
+    voice.say(`${r.name} Bölgesi`);
+    setPrompt(`🗺️ <b>${r.name} Bölgesi</b> <small>${ids.length} il</small>`);
+    info.innerHTML = `<p>${r.climate || ''} ${r.economy || ''}</p><button class="small-btn" data-more>ℹ️ Detay</button>`;
+    more(() => openRegionInfo(id));
+  }
+}
+
+// ---------------------------------------------------------------- ⛏️ kaynak avı
+function resQuestion(r) {
+  const g = game;
+  g.valid = r.provinces.filter(p => g.poolIds.has(p));
+  const pick = g.valid[Math.random() * g.valid.length | 0];
+  const distractors = data.resources.filter(x => x.id !== r.id && !x.provinces.includes(pick));
+  g.qType = distractors.length >= 3 && Math.random() < 0.45 ? 'which' : 'where';
+  if (g.qType === 'where') {
+    setPrompt(`${r.icon} <b>${r.q}</b> hangi illerde ${verbOf(r)}? <small>Birine dokun!</small>`, `${r.q} hangi illerde ${verbOf(r)}?`);
+    if (store.settings.region !== 'all') view.fitIds([...g.poolIds], 0.08, 100); else view.reset();
+    return;
+  }
+  // "Bu il hangisiyle ünlü?": il parlar, doğru ürün seçeneklerden seçilir
+  g.pick = pick;
+  const prov = byId.get(pick), lvl = store.settings.level;
+  view.set(pick, 'target'); view.bringToFront(pick);
+  view.fitIds([pick, ...prov.neighbors], 0.3, 320);
+  setPrompt(`🎯 <b>${prov.name}</b> ili hangisiyle ünlü?`, `${prov.name} ili hangisiyle ünlü?`);
+  const n = lvl === 'easy' ? 3 : 4;
+  const same = shuffle(distractors.filter(x => x.cat === r.cat)), other = shuffle(distractors.filter(x => x.cat !== r.cat));
+  // Kolayda farklı konulardan, zorda aynı konudan çeldiriciler
+  const pool = lvl === 'easy' ? [...other, ...same] : lvl === 'hard' ? [...same, ...other] : shuffle([...same.slice(0, 2), ...other]);
+  const opts = shuffle([r, ...pool.slice(0, n - 1)]);
+  const box = $('#choices'); box.innerHTML = ''; box.classList.remove('hidden');
+  for (const o of opts) {
+    const b = el('button', { className: 'choice' }, `${o.icon} ${o.name}`);
+    b.onclick = () => {
+      if (g.locked) return;
+      if (o.id === r.id) { b.classList.add('ok'); resCorrect(r); return; }
+      b.classList.add('no'); b.disabled = true;
+      g.wrongTries++; g.streak = 0; sfx.play('wrong');
+      feedback(`❌ ${prov.name}, ${o.name.toLocaleLowerCase('tr')} ile bilinmez.`, 'bad');
+      if (g.wrongTries >= n - 1) {
+        box.querySelectorAll('.choice').forEach(x => { if (x.textContent.includes(r.name)) x.classList.add('ok'); });
+        resReveal(r, `Doğrusu <b>${r.name}</b>.`);
+      }
+      updateHud();
+    };
+    box.append(b);
+  }
+}
+
+function resTap(item) {
+  const g = game, r = g.current;
+  if (g.qType === 'which') {
+    if (item.id === g.pick) feedback('Evet, bu il! Aşağıdan ünlü olduğu şeyi seç 👇', 'info');
+    else { view.flash(item.id, 'peek', 700); feedback(`Bu <b>${item.name}</b>. Aşağıdan seçim yap 👇`, 'info'); }
+    return;
+  }
+  if (r.provinces.includes(item.id)) return resCorrect(r, item);
+  g.wrongTries++; g.streak = 0;
+  sfx.play('wrong'); view.flash(item.id, 'wrong', 900);
+  const lvl = store.settings.level;
+  const famous = resOf(item.id).slice(0, 3).map(x => `${x.icon} ${x.name}`).join(', ');
+  let msg = `❌ Bu <b>${item.name}</b>.${famous ? ` <small>${item.name} şunlarla bilinir: ${famous}</small>` : ''}`;
+  if (g.wrongTries >= (lvl === 'easy' ? 1 : lvl === 'normal' ? 2 : 99) && g.hintLevel < 1) { resHint(true); msg += ' <small>💡 Turuncu çizgili bölgeye bak!</small>'; }
+  if (g.wrongTries >= (lvl === 'easy' ? 2 : 3)) return resReveal(r, msg);
+  feedback(msg, 'bad');
+  updateHud();
+}
+
+function resHint(silent = false) {
+  const g = game, r = g.current;
+  if (!r || g.locked) return;
+  g.streak = 0;
+  if (g.qType === 'which') {
+    g.hintLevel = 1;
+    if (!silent) feedback(`💡 İpucu: ${data.resourceCats[r.cat].icon} ${data.resourceCats[r.cat].name} konusundan.`, 'info');
+    return updateHud();
+  }
+  if (g.hintLevel < 1) {
+    g.hintLevel = 1;
+    // Üretim merkezlerinin en çok bulunduğu bölgeyi göster
+    const counts = {};
+    for (const p of g.valid) counts[byId.get(p).region] = (counts[byId.get(p).region] || 0) + 1;
+    const reg = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+    for (const it of data.items) if (it.region === reg) view.set(it.id, 'region-hint');
+    if (!silent) feedback(`💡 ${data.regions[reg].name} Bölgesi'ne bak!`, 'info');
+  } else {
+    g.hintLevel = 2;
+    view.set(g.valid[0], 'hint'); view.bringToFront(g.valid[0]);
+    if (!silent) feedback('💡 Parlayan il doğru cevaplardan biri!', 'info');
+  }
+  updateHud();
+}
+
+function resCorrect(r, tapped) {
+  const g = game;
+  g.locked = true;
+  const firstTry = g.wrongTries === 0 && g.hintLevel === 0;
+  g.streak = firstTry ? g.streak + 1 : 0;
+  g.bestStreak = Math.max(g.bestStreak, g.streak);
+  const pts = points();
+  g.score += pts;
+  if (firstTry) g.correct++; else g.missed.add('r:' + r.id);
+  const p = prog(); p.rmastery ||= {}; p.rmastery[r.id] = Math.max(0, (p.rmastery[r.id] || 0) + (firstTry ? 1 : -1)); save();
+  view.clear('region-hint', 'hint', 'target');
+  showResourceOnMap(r, false);
+  if (tapped) view.flash(tapped.id, 'correct', 900);
+  sfx.play(g.streak > 0 && g.streak % 5 === 0 ? 'streak' : 'correct');
+  feedback(`✅ ${r.icon} <b>${r.name}</b> +${pts} <small>📍 ${names(r.provinces)}</small> <button class="fb-info" data-rid="${r.id}">ℹ️ Bilgi</button>`, 'good');
+  voice.say(`Harika! ${r.name}`);
+  updateHud();
+  if (store.settings.infoQuiz) { openResourceInfo(r, { resume: true }); return; }
+  setTimeout(() => { if (game === g) next(); }, 2400);
+}
+
+function resReveal(r, msg) {
+  const g = game;
+  g.locked = true; g.missed.add('r:' + r.id);
+  const p = prog(); p.rmastery ||= {}; p.rmastery[r.id] = Math.max(0, (p.rmastery[r.id] || 0) - 1); save();
+  view.clear('region-hint', 'hint');
+  showResourceOnMap(r, false);
+  feedback(`${msg} <small>${r.icon} ${r.name}: ${names(r.provinces)}</small> <button class="fb-info" data-rid="${r.id}">ℹ️ Bilgi</button>`, 'bad');
+  voice.say(`${r.name}: ${names(r.provinces)}`);
+  setTimeout(() => { if (game === g) next(); }, 3000);
+}
+
 // ---------------------------------------------------------------- bilgi kartı
 function openInfo(item, { resume = false } = {}) {
   const r = data.regions[item.region];
@@ -453,7 +964,7 @@ function openInfo(item, { resume = false } = {}) {
   $('#infoBody').innerHTML = `
     <div class="info-head" style="--c:${colorOf(item)}">
       <span class="plate big">${item.code}</span>
-      <div><h3>${item.name}</h3><span class="chip region"><i style="background:${r.color}"></i>${r.name} Bölgesi</span></div>
+      <div><h3>${item.name}</h3><button class="chip region" data-region="${item.region}"><i style="background:${r.color}"></i>${r.name} Bölgesi ›</button></div>
       <button class="small-btn" id="infoSpeak" aria-label="Kartı sesli oku">🔊</button>
     </div>
     <div class="info-grid">
@@ -464,6 +975,8 @@ function openInfo(item, { resume = false } = {}) {
     <div class="info-row"><h4>🍽️ Meşhur lezzetler</h4><p>${item.food}</p></div>
     <div class="info-row"><h4>🏛️ Görülecek yerler</h4><p>${item.places}</p></div>
     <div class="info-row did-you-know"><h4>💡 Biliyor muydun?</h4><p>${item.fact}</p></div>
+    ${economyRow(item)}
+    ${natureRow(item)}
     <div class="info-row"><h4>🗺️ Komşuları</h4><div class="chips small">${neighbors.map(nb => `<button class="chip" data-nb="${nb.id}">${nb.name}</button>`).join('')}</div></div>
     ${resume ? '<button class="primary-btn wide" id="infoContinue">Devam et →</button>' : ''}`;
   $('#infoSpeak').onclick = () => voice.say(`${item.name}. ${r.name} Bölgesinde. Plaka kodu ${item.plate}. ${item.fact} Meşhur lezzetleri: ${item.food}.`, { force: true });
@@ -472,11 +985,18 @@ function openInfo(item, { resume = false } = {}) {
     if (game?.mode.id === 'explore') exploreTap(nb);
     else { view.flash(nb.id, 'peek', 1400); openInfo(nb, { resume }); }
   });
+  $('#infoBody').querySelectorAll('[data-feat]').forEach(b => b.onclick = () => {
+    const f = byFid.get(b.dataset.feat);
+    if (game?.mode.id === 'explore') handleFeatureTap(f.id); else openFeatureInfo(f, { resume });
+  });
+  bindCardLinks(resume);
   if (resume) $('#infoContinue').onclick = () => { closeInfo(); next(); };
-  const sheet = $('#info');
-  sheet.classList.add('open'); sheet.setAttribute('aria-hidden', 'false');
-  sheet.dataset.resume = resume ? '1' : '';
-  sheet.scrollTop = 0;
+  showSheet(resume);
+}
+function natureRow(item) {
+  const fs = (data.features || []).filter(f => f.provinces?.includes(item.id));
+  if (!fs.length) return '';
+  return `<div class="info-row"><h4>🏞️ Doğal güzellikleri</h4><div class="chips small">${fs.map(f => `<button class="chip" data-feat="${f.id}">${data.layerTypes[f.type].icon} ${f.name}</button>`).join('')}</div></div>`;
 }
 function closeInfo() {
   const sheet = $('#info');
@@ -509,7 +1029,8 @@ function finish() {
   sfx.play('finish');
   if (stars >= 2) confetti();
   const secs = Math.round((Date.now() - g.startedAt) / 1000);
-  const missed = [...g.missed].map(id => byId.get(id));
+  const missed = [...g.missed].map(id => typeof id === 'string' && id.startsWith('f:') ? { ...byFid.get(id.slice(2)), learnKey: id }
+    : typeof id === 'string' && id.startsWith('r:') ? { ...byRid.get(id.slice(2)), learnKey: id } : { ...byId.get(id), learnKey: id });
   const title = stars === 3 ? 'Muhteşem!' : stars === 2 ? 'Çok iyi!' : stars === 1 ? 'Güzel başlangıç!' : 'Biraz daha pratik!';
   $('#resultBody').innerHTML = `
     <div class="result-stars">${[1, 2, 3].map(i => `<span class="${i <= stars ? 'on' : ''}" style="--d:${i * 0.15}s">★</span>`).join('')}</div>
@@ -522,7 +1043,7 @@ function finish() {
       <div><b>${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}</b><small>Süre</small></div>
     </div>
     <p class="earned">+${stars * 5} ⭐ kazandın</p>
-    ${missed.length ? `<h4>📚 Tekrar çalışalım</h4><div class="chips small center">${missed.map(m => `<button class="chip" data-learn="${m.id}">${m.name}</button>`).join('')}</div>` : '<p>Hiç hata yapmadın! 👏</p>'}
+    ${missed.length ? `<h4>📚 Tekrar çalışalım</h4><div class="chips small center">${missed.map(m => `<button class="chip" data-learn="${m.learnKey}">${m.name}</button>`).join('')}</div>` : '<p>Hiç hata yapmadın! 👏</p>'}
     <div class="modal-actions">
       <button class="ghost-btn" id="rMenu">Menü</button>
       <button class="primary-btn" id="rAgain">Tekrar oyna</button>
@@ -533,7 +1054,27 @@ function finish() {
   $('#rAgain').onclick = () => { dlg.close(); startGame(g.mode.id); };
   dlg.querySelectorAll('[data-learn]').forEach(b => b.onclick = () => {
     dlg.close();
-    const it = byId.get(+b.dataset.learn);
+    const key = b.dataset.learn;
+    if (key.startsWith('r:')) {
+      const r = byRid.get(key.slice(2));
+      view.clear('target', 'hint', 'region-hint', 'center', 'peek');
+      showResourceOnMap(r);
+      openResourceInfo(r);
+      $('#promptText').innerHTML = `📚 ${r.icon} <b>${r.name}</b> <button class="small-btn" id="backToResult">← Sonuçlar</button>`;
+      $('#backToResult').onclick = () => { closeInfo(); dlg.showModal(); };
+      return;
+    }
+    if (key.startsWith('f:')) {
+      const f = byFid.get(key.slice(2));
+      view.clear('target', 'hint', 'region-hint', 'center', 'peek'); view.clearFeatures('target');
+      view.setFeature(f.id, 'target'); f.provinces.forEach(p => view.set(p, 'peek'));
+      view.fitFeature(f.id);
+      openFeatureInfo(f);
+      $('#promptText').innerHTML = `📚 <b>${f.name}</b> <button class="small-btn" id="backToResult">← Sonuçlar</button>`;
+      $('#backToResult').onclick = () => { closeInfo(); dlg.showModal(); };
+      return;
+    }
+    const it = byId.get(+key);
     view.clear('target', 'hint', 'region-hint', 'center');
     view.fitIds([it.id], 0.6, 260); view.set(it.id, 'hint'); view.bringToFront(it.id);
     openInfo(it);
@@ -591,6 +1132,15 @@ function bindUi() {
   $('#btnSpeak').onclick = () => game?.speech && voice.say(game.speech, { force: true });
   $('#btnHint').onclick = () => {
     const g = game; if (!g?.current || g.locked) return;
+    if (g.mode.id === 'resources') return resHint();
+    if (g.mode.id === 'nature') {
+      const f = g.current; g.streak = 0;
+      if (g.hintLevel < 1) { g.hintLevel = 1; view.setFeature(f.id, 'target'); view.fitFeature(f.id); feedback('💡 Parlayan yere bak!', 'info'); }
+      else if (g.qType === 'where') { g.hintLevel = 2; view.set(f.provinces[0], 'hint'); feedback('💡 Parlayan il doğru cevaplardan biri!', 'info'); }
+      else { g.hintLevel = 2; feedback(`💡 İpucu: ${f.fact.split('.')[0].replace(f.name, '…')}.`, 'info'); }
+      updateHud();
+      return;
+    }
     if (g.mode.id === 'neighbors') {
       const left = g.current.neighbors.filter(n => !g.neighborFound.has(n));
       if (left.length) { view.set(left[0], 'hint'); g.hintLevel = 1; g.streak = 0; }
@@ -609,21 +1159,33 @@ function bindUi() {
       setTimeout(() => { if (game === g) next(); }, 2200);
       return;
     }
+    if (g.mode.id === 'nature') return natureReveal(g.current, '⏭️ Geçtin.');
+    if (g.mode.id === 'resources') return resReveal(g.current, '⏭️ Geçtin.');
     reveal(g.current, `⏭️ Geçtin. Burası <b>${g.current.name}</b>.`);
   };
   $('#zIn').onclick = () => view.zoomBy(1.5);
   $('#zOut').onclick = () => view.zoomBy(1 / 1.5);
   $('#zReset').onclick = () => view.reset();
   $('#zLabels').onclick = () => {
-    const cycle = game.mode.id === 'explore' ? ['none', 'name', 'code'] : ['found', 'none'];
+    const cycle = game.mode.id === 'explore' ? ['none', 'name', 'code'] : ['nature', 'atlas', 'resources'].includes(game.mode.id) ? ['none', 'name'] : ['found', 'none'];
     labelMode = cycle[(cycle.indexOf(labelMode) + 1) % cycle.length];
     refreshLabels();
   };
+  $('#zLayers').onclick = e => {
+    e.stopPropagation();
+    const menu = $('#layerMenu');
+    if (menu.classList.toggle('hidden')) return;
+    renderLayerMenu();
+  };
+  document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('#layerMenu, #zLayers')) $('#layerMenu').classList.add('hidden');
+  });
   $('#infoClose').onclick = () => { if (closeInfo()) next(); };
   $('#feedback').addEventListener('click', e => {
     const b = e.target.closest('.fb-info'); if (!b) return;
-    const it = byId.get(+b.dataset.id);
-    openInfo(it);
+    if (b.dataset.fid) return openFeatureInfo(byFid.get(b.dataset.fid));
+    if (b.dataset.rid) return openResourceInfo(byRid.get(b.dataset.rid));
+    openInfo(byId.get(+b.dataset.id));
   });
   // Bilgi kartını aşağı kaydırarak kapat (mobil)
   let sy = null;

@@ -86,12 +86,20 @@
         <button id="zOut" aria-label="Uzaklaştır">－</button>
         <button id="zReset" aria-label="Haritayı sığdır">⤢</button>
         <button id="zLabels" aria-label="Etiketler">Aa</button>
+        <button id="zLayers" aria-label="Coğrafi katmanlar">🏔️</button>
       </div>
+      <div class="layer-menu hidden" id="layerMenu"></div>
       <div class="legend" id="legend"></div>
       <div class="feedback" id="feedback" aria-live="polite"></div>
     </div>
 
     <div class="choices hidden" id="choices"></div>
+
+    <div class="atlas hidden" id="atlas">
+      <div class="atlas-tabs" id="atlasTabs" role="tablist" aria-label="Konular"></div>
+      <div class="atlas-chips" id="atlasChips"></div>
+      <div class="atlas-info" id="atlasInfo" aria-live="polite"></div>
+    </div>
 
     <aside class="sheet" id="info" aria-hidden="true">
       <div class="sheet-handle"></div>

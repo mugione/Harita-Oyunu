@@ -53,13 +53,41 @@ Sorular ve il adları **Türkçe sesli okunur**. Küçük yaştaki çocuklar da 
 <td valign="top">
 
 ### 📚 Her il bir hikâye
-Plaka, bölge, nüfus, yüzölçümü, **komşular**, meşhur lezzetler, görülecek yerler ve bir **"Biliyor muydun?"** bilgisi.
+Plaka, bölge, nüfus, yüzölçümü, **komşular**, meşhur lezzetler, görülecek yerler, **doğal güzellikler** ve bir **"Biliyor muydun?"** bilgisi.
 
 </td>
 <td valign="top">
 
 ### 🏆 Motive eden oyun
 Puanlar, 🔥 art arda doğru serileri, tur sonunda ⭐ yıldızlar, rekorlar ve yanlış yapılan iller için **"Tekrar çalışalım"** listesi.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🏔️ Coğrafi katmanlar
+**14 dağ, 17 göl, 13 nehir, 4 deniz ve 2 boğaz** haritanın üzerinde. Her birine dokununca yüksekliği, uzunluğu ya da yüzölçümü, bulunduğu iller ve ilginç bir bilgisi açılır.
+
+</td>
+<td valign="top">
+
+### 🔗 Her şey birbirine bağlı
+Konya'nın kartında Tuz Gölü, Tuz Gölü'nün kartında Konya, Ankara ve Aksaray çıkar. Çocuk bir karttan diğerine geçerek coğrafyayı bir ağ gibi öğrenir.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🧺 Zenginlikler Atlası
+**60 maden, enerji kaynağı, tarım ürünü ve hayvancılık türü.** Fındığa dokun, Karadeniz illeri 🌰 simgeleriyle parlasın. Bora dokun, Eskişehir'den Balıkesir'e bor yatakları görünsün.
+
+</td>
+<td valign="top">
+
+### 🌳 Bitki örtüsü ve bölgeler
+Türkiye'nin bitki örtüsü haritası (nemli orman, maki, bozkır, dağ çayırı…), endemik bitkiler ve 7 bölgenin iklim, ekonomi ve zenginlik kartları.
 
 </td>
 </tr>
@@ -74,6 +102,9 @@ Puanlar, 🔥 art arda doğru serileri, tur sonunda ⭐ yıldızlar, rekorlar ve
 | ❓ | **Bu Hangi İl?** | Parlayan ilin adını seçeneklerden seç | İl şekilleri, tanıma |
 | 🚗 | **Plaka Avı** | *"34 plakalı il hangisi?"* | Plaka kodları |
 | 🤝 | **Komşular** | Bir ilin bütün komşularını bul | Komşuluk, bölge bilgisi |
+| 🧺 | **Zenginlikler Atlası** | Bir ürün, maden ya da bitki örtüsü seç, haritada gör | Ekonomik coğrafya |
+| ⛏️ | **Kaynak Avı** | *"Bor madeni hangi illerde çıkarılır?"* ya da *"Rize ili hangisiyle ünlü?"* | Madenler, tarım, enerji |
+| 🏞️ | **Doğa Avı** | *"Van Gölü hangi ilde?"* ya da *"Parlayan nehir hangisi?"* | Dağlar, göller, nehirler, denizler |
 | ⏱️ | **Zamana Karşı** | 60 saniyede olabildiğince çok il bul | Hız, pekiştirme |
 
 **Her modda seçebileceklerin:** 🗺️ 7 coğrafi bölgeden biri ya da tüm Türkiye · 🔢 10 / 20 / tüm iller · 🎚️ Kolay / Normal / Zor
@@ -108,6 +139,7 @@ Puanlar, 🔥 art arda doğru serileri, tur sonunda ⭐ yıldızlar, rekorlar ve
 
 - **Telefon, tablet, masaüstü:** Dikey, yatay ve geniş ekranlar için ayrı düzenler var.
 - **Dokunmatik harita:** Parmakla kaydır, iki parmakla yakınlaştır, fare tekerleğiyle zoom yap.
+- **Katman menüsü (🏔️):** Dağları, gölleri, nehirleri ve denizleri tek dokunuşla aç/kapat. Yakınlaştıkça adları belirir.
 - **Uygulama gibi kur (PWA):** Android/masaüstünde *"📲 Uygulama olarak yükle"*, iPhone/iPad'de *Paylaş → Ana Ekrana Ekle*.
 - **Çevrimdışı çalışır:** İlk açılıştan sonra internet olmadan da oynanır.
 - **Gece modu:** Cihaz karanlık temadaysa oyun da karanlık temaya geçer.
@@ -118,8 +150,8 @@ Puanlar, 🔥 art arda doğru serileri, tur sonunda ⭐ yıldızlar, rekorlar ve
 Kurulum yok, derleme yok, `npm install` yok. Sadece statik dosyalar:
 
 ```bash
-git clone https://github.com/<kullanici-adi>/harita-kasifi.git
-cd harita-kasifi/public
+git clone https://github.com/mugione/Harita-Oyunu.git
+cd Harita-Oyunu/public
 python3 -m http.server 5173
 ```
 
@@ -158,11 +190,18 @@ harita-kasifi/
 │       └── maps/
 │           ├── index.js        → Harita kataloğu (Türkiye, yakında Dünya)
 │           ├── tr-info.js      → 81 ilin eğitici bilgileri ✍️
-│           └── tr-geo.js       → İl sınırları (otomatik üretilir)
+│           ├── tr-geo.js       → İl sınırları (otomatik üretilir)
+│           ├── tr-layers-info.js → Dağ, göl, nehir, deniz bilgileri ✍️
+│           ├── tr-resources.js → Madenler, tarım, enerji, bitki örtüsü, bölge özetleri ✍️
+│           └── tr-layers.js    → Katman şekilleri (otomatik üretilir)
 ├── 📁 scripts/
 │   ├── build-map.mjs           → GeoJSON → SVG, komşuluk ve yüzölçümü hesabı
+│   ├── extract-physical.mjs    → Natural Earth'ten Türkiye'nin nehir ve gölleri
+│   ├── build-layers.mjs        → Katman şekilleri + hangi ilde olduklarının hesabı
 │   └── build-banner.mjs        → README kapak görseli
-├── 📁 data/tr-cities.geojson   → Kaynak harita verisi
+├── 📁 data/
+│   ├── tr-cities.geojson       → İl sınırları kaynak verisi
+│   └── tr-physical.geojson     → Nehir ve göl kaynak verisi
 └── wrangler.jsonc              → Cloudflare yapılandırması
 ```
 
@@ -175,6 +214,8 @@ flowchart LR
     B --> D[🤝 Komşuluk tespiti]
     B --> E[🏷️ Etiket noktaları]
     C & D & E --> F[📦 tr-geo.js]
+    N[🌊 Natural Earth] -->|build-layers.mjs| L[📦 tr-layers.js]
+    L --> H
     G[✍️ tr-info.js] --> H
     F --> H[🎮 Oyun motoru]
     H --> I[📱 Dokunmatik SVG harita]
@@ -183,12 +224,14 @@ flowchart LR
 - **Harita verisi** tek seferlik bir betikle SVG yollarına çevrilir, sadeleştirilir (~60 KB).
 - **Komşuluklar** sınır noktalarının birbirine yakınlığından otomatik hesaplanır.
 - **Yüzölçümleri** küresel alan formülüyle hesaplanır, sıralamalar buradan çıkar.
+- **Nehir ve göllerin illeri** şekillerin il sınırlarıyla kesiştirilmesiyle otomatik bulunur; dağlar elle işaretlenmiştir.
 - **Oyun motoru** haritadan bağımsızdır: aynı modlar ileride Dünya haritasıyla da çalışır.
 
 Harita verisini değiştirdiysen yeniden üret:
 
 ```bash
-npm run build:map
+npm run build:map      # il sınırları
+npm run build:layers   # dağlar, göller, nehirler (tr-layers-info.js değişince)
 ```
 
 ## 🗺️ Yol Haritası
@@ -197,10 +240,12 @@ npm run build:map
 - [x] Sesli okuma ve ses efektleri
 - [x] PWA ve çevrimdışı çalışma
 - [x] Bilgi kartları ve komşuluk verisi
+- [x] 🏞️ Coğrafi katmanlar: dağlar, göller, nehirler, denizler
+- [x] 🧺 Madenler, tarım ürünleri, enerji kaynakları ve bitki örtüsü
 - [ ] 🌍 **Dünya haritası** (ülkeler, başkentler, bayraklar)
 - [ ] 🏅 Rozetler ve başarımlar
 - [ ] 🧑‍🏫 Öğretmen modu (sınıf için özel soru listeleri)
-- [ ] 🏞️ Coğrafi katmanlar: dağlar, göller, nehirler
+- [ ] 🌾 Ovalar, platolar, milli parklar
 
 <details>
 <summary><b>🌍 Dünya haritasını (ya da başka bir haritayı) nasıl eklerim?</b></summary>
@@ -228,14 +273,15 @@ Katkılarını bekliyoruz! Özellikle **eğitici içerik** konusunda her düzelt
 
 1. 🍴 Depoyu fork'la
 2. 🌿 Bir dal aç: `git checkout -b ozellik/harika-fikir`
-3. ✍️ Değişikliğini yap (il bilgileri için: `public/js/maps/tr-info.js`)
+3. ✍️ Değişikliğini yap (il bilgileri: `public/js/maps/tr-info.js`, doğa: `tr-layers-info.js`, zenginlikler: `tr-resources.js`)
 4. 📬 Pull request gönder
 
-> 📝 **İçerik notu:** Nüfus bilgileri TÜİK 2023 verilerine göre yuvarlanmış yaklaşık değerlerdir. Yüzölçümleri harita verisinden hesaplandığı için resmi değerlerden birkaç yüzde sapabilir. Hatalı ya da eksik bir bilgi görürsen lütfen bir *issue* aç.
+> 📝 **İçerik notu:** Nüfus bilgileri TÜİK 2023 verilerine göre yuvarlanmış yaklaşık değerlerdir. Yüzölçümleri harita verisinden hesaplandığı için resmi değerlerden birkaç yüzde sapabilir. Dağ yükseklikleri, göl alanları ve nehir uzunlukları da yaklaşık değerlerdir. Ürün ve maden listeleri bütün illeri değil, en bilinen üretim merkezlerini gösterir. Hatalı ya da eksik bir bilgi görürsen lütfen bir *issue* aç.
 
 ## 🙏 Teşekkürler
 
 - İl sınırları: [cihadturhan/tr-geojson](https://github.com/cihadturhan/tr-geojson)
+- Nehir ve göller: [Natural Earth](https://www.naturalearthdata.com) (public domain)
 - Yazı tipleri: [Baloo 2](https://fonts.google.com/specimen/Baloo+2) ve [Nunito](https://fonts.google.com/specimen/Nunito) (Google Fonts)
 - Nüfus verileri: [TÜİK](https://www.tuik.gov.tr) Adrese Dayalı Nüfus Kayıt Sistemi
 

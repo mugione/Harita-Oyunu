@@ -5,10 +5,19 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "keywords": ["türkiye", "harita", "eğitim", "çocuk", "oyun", "pwa", "coğrafya"],
+  "keywords": [
+    "türkiye",
+    "harita",
+    "eğitim",
+    "çocuk",
+    "oyun",
+    "pwa",
+    "coğrafya"
+  ],
   "scripts": {
     "dev": "cd public && python3 -m http.server 5173",
     "build:map": "node scripts/build-map.mjs",
+    "build:layers": "node scripts/build-layers.mjs",
     "build:banner": "node scripts/build-banner.mjs",
     "deploy": "wrangler deploy"
   }
