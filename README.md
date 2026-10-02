@@ -81,7 +81,7 @@ Konya'nın kartında Tuz Gölü, Tuz Gölü'nün kartında Konya, Ankara ve Aksa
 <td valign="top">
 
 ### 🧺 Zenginlikler Atlası
-**60 maden, enerji kaynağı, tarım ürünü ve hayvancılık türü.** Fındığa dokun, Karadeniz illeri 🌰 simgeleriyle parlasın. Bora dokun, Eskişehir'den Balıkesir'e bor yatakları görünsün.
+**75 maden, enerji kaynağı, tarım ürünü ve hayvancılık türü.** Fındığa dokun, Karadeniz illeri 🌰 simgeleriyle parlasın. Bora dokun, Eskişehir'den Balıkesir'e bor yatakları görünsün.
 
 </td>
 <td valign="top">
@@ -105,6 +105,7 @@ Türkiye'nin bitki örtüsü haritası (nemli orman, maki, bozkır, dağ çayır
 | 🤝 | **Komşular** | Bir ilin bütün komşularını bul | Komşuluk, bölge bilgisi |
 | 🧺 | **Zenginlikler Atlası** | Bir ürün, maden ya da bitki örtüsü seç, haritada gör | Ekonomik coğrafya |
 | ⛏️ | **Kaynak Avı** | *"Bor madeni hangi illerde çıkarılır?"* ya da *"Rize ili hangisiyle ünlü?"* | Madenler, tarım, enerji |
+| 💎 | **Kaynak Oyunu** | *"Demir hangi ilde çıkarılır?"* — 30 maden ile kömür, petrol ve doğal gaz; şıklardan doğru ili seç | Madenler, yeraltı zenginlikleri |
 | 🏞️ | **Doğa Avı** | *"Van Gölü hangi ilde?"* ya da *"Parlayan nehir hangisi?"* | Dağlar, göller, nehirler, denizler |
 | ⏱️ | **Zamana Karşı** | 60 saniyede olabildiğince çok il bul | Hız, pekiştirme |
 

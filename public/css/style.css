@@ -364,10 +364,14 @@ button:disabled { cursor: not-allowed; }
 @media (max-height: 520px) and (orientation: landscape) { .zoom-ctl button { width: 36px; height: 36px; font-size: 17px; } }
 
 /* ---------------------------------------------------------------- zenginlikler atlası */
-[data-mode="atlas"] .shape, [data-mode="resources"] .shape { fill: color-mix(in srgb, var(--c) 30%, var(--blank)); }
+[data-mode="atlas"] .shape, [data-mode="resources"] .shape, [data-mode="mines"] .shape { fill: color-mix(in srgb, var(--c) 30%, var(--blank)); }
 .shape.painted { fill: var(--hl) !important; }
 #map.atlas-focus .shape:not(.painted):not(.target):not(.hint) { opacity: .5; }
 .marker { font-size: calc(17px / var(--s, 1)); text-anchor: middle; dominant-baseline: central; pointer-events: none; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.35)); }
+.marker.letter { font-family: var(--display); font-weight: 800; font-size: calc(20px / var(--s, 1)); fill: #fff; stroke: var(--brand); stroke-width: calc(5px / var(--s, 1)); paint-order: stroke; stroke-linejoin: round; }
+.opt-letter { display: inline-grid; place-items: center; width: 1.45em; height: 1.45em; margin-right: 8px; border-radius: 50%; background: var(--brand); color: #fff; font-size: .8em; vertical-align: .1em; }
+.choice.ok .opt-letter, .choice.no .opt-letter { background: rgba(255,255,255,.3); }
+.choice.gone { opacity: .3; text-decoration: line-through; }
 
 .atlas { padding: 8px 12px max(10px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; background: var(--card); border-radius: 22px 22px 0 0; box-shadow: 0 -8px 24px -14px rgba(10,20,60,.35); }
 .atlas-tabs, .atlas-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 2px 12px; }

@@ -114,15 +114,15 @@ export class MapView {
     return root;
   }
 
-  // İllerin üzerine simge koy (ör. 🌰 fındık üreten iller). list: [{ id, text }]
+  // İllerin üzerine simge koy (ör. 🌰 fındık üreten iller). list: [{ id, text, cls? }]
   setMarkers(list = []) {
     this.gMarkers.innerHTML = '';
-    for (const { id, text } of list) {
+    for (const { id, text, cls } of list) {
       const s = this.shapes[id]; if (!s) continue;
       const g = document.createElementNS(NS, 'g');
       g.setAttribute('transform', `translate(${s.cx} ${s.cy})`);
       const t = document.createElementNS(NS, 'text');
-      t.setAttribute('class', 'marker');
+      t.setAttribute('class', 'marker' + (cls ? ' ' + cls : ''));
       t.textContent = text;
       g.append(t);
       this.gMarkers.append(g);

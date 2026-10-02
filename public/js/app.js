@@ -30,6 +30,7 @@ const MODES = [
   { id: 'nature',    icon: '🏞️', title: 'Doğa Avı',       desc: 'Dağları, gölleri ve nehirleri tanı.',         color: '#2BA84A', needs: 'features' },
   { id: 'atlas',     icon: '🧺', title: 'Zenginlikler Atlası', desc: 'Madenler, tarım ürünleri, bitki örtüsü nerede?', color: '#E0A020', needs: 'resources' },
   { id: 'resources', icon: '⛏️', title: 'Kaynak Avı',     desc: 'Hangi ürün nerede yetişir, maden nerede çıkar?', color: '#C0622B', needs: 'resources' },
+  { id: 'mines',     icon: '💎', title: 'Kaynak Oyunu',   desc: 'Maden nerede çıkarılır? Şıklardan ili seç.',  color: '#8E5CF7', needs: 'resources' },
   { id: 'timed',     icon: '⏱️', title: 'Zamana Karşı',   desc: '60 saniyede kaç il bulabilirsin?',            color: '#FF5C8A' },
 ];
 const LEVEL_HELP = {
@@ -147,6 +148,10 @@ function startGame(modeId) {
     const ids = new Set(items.map(i => i.id));
     queue = shuffle(data.resources.filter(r => r.provinces.some(p => ids.has(p)))).slice(0, len);
   }
+  if (modeId === 'mines') {
+    const ids = new Set(items.map(i => i.id));
+    queue = shuffle(data.resources.filter(r => isMineral(r) && r.provinces.some(p => ids.has(p))));
+  }
   if (modeId === 'nature') {
     const ids = new Set(items.map(i => i.id));
     queue = shuffle(data.features.filter(f => f.provinces?.some(p => ids.has(p))));
@@ -193,7 +198,7 @@ function startGame(modeId) {
   if (store.settings.region !== 'all') setTimeout(() => view.fitIds([...game.poolIds], 0.08, 100), 60);
 
   applyLayers();
-  labelMode = modeId === 'names' ? 'all' : ['explore', 'nature', 'atlas', 'resources'].includes(modeId) ? 'none' : (store.settings.level === 'hard' ? 'none' : 'found');
+  labelMode = modeId === 'names' ? 'all' : ['explore', 'nature', 'atlas', 'resources', 'mines'].includes(modeId) ? 'none' : (store.settings.level === 'hard' ? 'none' : 'found');
   refreshLabels();
   renderLegend();
   updateHud();
@@ -264,6 +269,9 @@ function next() {
     case 'resources':
       resQuestion(c);
       break;
+    case 'mines':
+      mineQuestion(c);
+      break;
     case 'neighbors':
       view.set(c.id, 'center'); view.bringToFront(c.id);
       view.fitIds([c.id, ...c.neighbors], 0.12, 220);
@@ -321,6 +329,7 @@ function handleTap(id) {
   if (!g.poolIds.has(id) && !['neighbors', 'nature', 'resources'].includes(g.mode.id)) return;
   if (g.mode.id === 'nature') return natureTap(item);
   if (g.mode.id === 'resources') return resTap(item);
+  if (g.mode.id === 'mines') return mineTap(item);
   if (g.mode.id === 'atlas') { sfx.play('tap'); voice.say(item.name); view.flash(item.id, 'peek', 1200); return openInfo(item); }
 
   if (g.mode.id === 'explore') return exploreTap(item);
@@ -507,6 +516,8 @@ function visibleLayers() {
   if (game?.mode.id === 'nature') return Object.keys(data.layerTypes || {});
   // İsimli haritada dağ simgeleri il adlarının üstüne binmesin
   if (game?.mode.id === 'names') return ['lake', 'river', 'sea'];
+  // Kaynak Oyunu'nda dağ simgeleri şık harflerinin üstüne binmesin
+  if (game?.mode.id === 'mines') return store.settings.layers.filter(t => t !== 'mountain');
   return store.settings.layers;
 }
 function applyLayers() {
@@ -980,6 +991,90 @@ function resReveal(r, msg) {
   setTimeout(() => { if (game === g) next(); }, 3000);
 }
 
+// ---------------------------------------------------------------- 💎 kaynak oyunu
+// "Demir hangi ilde çıkarılır?" sorusu; şıklar il adları, haritada da harflerle işaretli
+const LETTERS = ['A', 'B', 'C', 'D'];
+const isMineral = r => r.cat === 'maden' || (r.cat === 'enerji' && r.verb === 'çıkarılır');
+
+function mineQuestion(r) {
+  const g = game, lvl = store.settings.level, n = lvl === 'easy' ? 3 : 4;
+  const answers = r.provinces.filter(p => g.poolIds.has(p));
+  g.answer = byId.get(answers[Math.random() * answers.length | 0]);
+  // Çeldiriciler bu madenin listesinde olmayan illerden gelir. Liste yalnızca başlıca merkezleri gösterdiği için
+  // kolay/normalde madenin hiç geçmediği bölgelerden, zorda üretim illerinin komşularından seçilir.
+  const not = i => !r.provinces.includes(i.id);
+  const inPool = shuffle(g.items.filter(not));
+  const regs = new Set(r.provinces.map(p => byId.get(p).region));
+  const far = shuffle(inPool.filter(i => !regs.has(i.region)));
+  const near = shuffle([...new Set(r.provinces.flatMap(p => byId.get(p).neighbors))].map(id => byId.get(id)).filter(i => not(i) && g.poolIds.has(i.id)));
+  const cands = lvl === 'hard' ? [...near, ...inPool] : lvl === 'easy' ? [...far, ...inPool] : [...far.slice(0, 2), ...inPool];
+  // Seçili bölge çok küçükse bütün Türkiye'den tamamla
+  if (new Set(cands).size < n - 1) cands.push(...shuffle(data.items.filter(not)));
+  g.opts = shuffle([g.answer, ...[...new Set(cands)].slice(0, n - 1)]);
+
+  setPrompt(`${r.icon} <b>${r.q}</b> hangi ilde ${verbOf(r)}? <small>Şıklardan birini seç!</small>`, `${r.q} hangi ilde ${verbOf(r)}?`);
+  g.opts.forEach(o => view.set(o.id, 'peek'));
+  view.setMarkers(g.opts.map((o, i) => ({ id: o.id, text: LETTERS[i], cls: 'letter' })));
+  view.fitIds(g.opts.map(o => o.id), 0.15, 320);
+
+  const box = $('#choices'); box.innerHTML = ''; box.classList.remove('hidden');
+  g.opts.forEach((o, i) => {
+    const b = el('button', { className: 'choice' }, `<span class="opt-letter">${LETTERS[i]}</span>${o.name}`);
+    b.dataset.id = o.id;
+    b.onclick = () => mineChoose(o.id);
+    box.append(b);
+  });
+}
+
+function mineTap(item) {
+  if (game.opts.some(o => o.id === item.id)) return mineChoose(item.id);
+  view.flash(item.id, 'peek', 700);
+  feedback(`Bu <b>${item.name}</b>. Harfli illerden birini ya da aşağıdaki şıkları seç 👇`, 'info');
+}
+
+function mineChoose(id) {
+  const g = game, b = $(`#choices [data-id="${id}"]`);
+  if (!g || g.locked || !b || b.disabled) return;
+  if (id === g.answer.id) {
+    b.classList.add('ok');
+    resCorrect(g.current, g.answer);
+    view.clear('peek'); view.set(g.answer.id, 'selected'); view.fitIds(g.current.provinces, 0.2, 320);
+    return;
+  }
+  const it = byId.get(id);
+  b.classList.add('no'); b.disabled = true;
+  g.wrongTries++; g.streak = 0;
+  sfx.play('wrong'); view.flash(id, 'wrong', 900);
+  if (navigator.vibrate) navigator.vibrate(60);
+  const famous = resOf(id).filter(isMineral).slice(0, 3).map(x => `${x.icon} ${x.name}`).join(', ');
+  const msg = `❌ <b>${it.name}</b> değil.${famous ? ` <small>${it.name}: ${famous}</small>` : ''}`;
+  if ($('#choices').querySelectorAll('.choice:not(:disabled)').length <= 1) return mineReveal(msg);
+  feedback(msg, 'bad');
+  updateHud();
+}
+
+// İpucu: yanlış bir şıkkı ele, tek yanlış kaldıysa bölgeyi söyle
+function mineHint() {
+  const g = game;
+  if (!g.answer || g.locked) return;
+  g.streak = 0; g.hintLevel = Math.max(g.hintLevel, 1);
+  const wrong = [...$('#choices').querySelectorAll('.choice:not(:disabled)')].filter(b => +b.dataset.id !== g.answer.id);
+  if (wrong.length > 1) {
+    const b = wrong[Math.random() * wrong.length | 0];
+    b.disabled = true; b.classList.add('gone');
+    view.set(+b.dataset.id, 'peek', false);
+    feedback(`💡 <b>${byId.get(+b.dataset.id).name}</b> değil, onu eledim.`, 'info');
+  } else feedback(`💡 ${data.regions[g.answer.region].name} Bölgesi'nde`, 'info');
+  updateHud();
+}
+
+function mineReveal(msg) {
+  const g = game;
+  $(`#choices [data-id="${g.answer.id}"]`)?.classList.add('ok');
+  resReveal(g.current, msg);
+  view.clear('peek'); view.set(g.answer.id, 'hint'); view.fitIds(g.current.provinces, 0.2, 320);
+}
+
 // ---------------------------------------------------------------- bilgi kartı
 function openInfo(item, { resume = false } = {}) {
   const r = data.regions[item.region];
@@ -1157,6 +1252,7 @@ function bindUi() {
   $('#btnHint').onclick = () => {
     const g = game; if (!g?.current || g.locked) return;
     if (g.mode.id === 'resources') return resHint();
+    if (g.mode.id === 'mines') return mineHint();
     if (g.mode.id === 'nature') {
       const f = g.current; g.streak = 0;
       if (g.hintLevel < 1) { g.hintLevel = 1; view.setFeature(f.id, 'target'); view.fitFeature(f.id); feedback('💡 Parlayan yere bak!', 'info'); }
@@ -1185,13 +1281,14 @@ function bindUi() {
     }
     if (g.mode.id === 'nature') return natureReveal(g.current, '⏭️ Geçtin.');
     if (g.mode.id === 'resources') return resReveal(g.current, '⏭️ Geçtin.');
+    if (g.mode.id === 'mines') return mineReveal('⏭️ Geçtin.');
     reveal(g.current, `⏭️ Geçtin. Burası <b>${g.current.name}</b>.`);
   };
   $('#zIn').onclick = () => view.zoomBy(1.5);
   $('#zOut').onclick = () => view.zoomBy(1 / 1.5);
   $('#zReset').onclick = () => view.reset();
   $('#zLabels').onclick = () => {
-    const cycle = game.mode.id === 'explore' ? ['none', 'name', 'code'] : ['nature', 'atlas', 'resources'].includes(game.mode.id) ? ['none', 'name'] : ['found', 'none'];
+    const cycle = game.mode.id === 'explore' ? ['none', 'name', 'code'] : ['nature', 'atlas', 'resources', 'mines'].includes(game.mode.id) ? ['none', 'name'] : ['found', 'none'];
     labelMode = cycle[(cycle.indexOf(labelMode) + 1) % cycle.length];
     refreshLabels();
   };

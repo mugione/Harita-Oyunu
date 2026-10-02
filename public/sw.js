@@ -1,5 +1,5 @@
 // Çevrimdışı çalışma için servis çalışanı
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE = `harita-kasifi-${VERSION}`;
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
