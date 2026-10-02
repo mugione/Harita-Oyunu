@@ -18,6 +18,7 @@
     "dev": "cd public && python3 -m http.server 5173",
     "build:map": "node scripts/build-map.mjs",
     "build:layers": "node scripts/build-layers.mjs",
+    "build:world": "node scripts/build-world.mjs",
     "build:banner": "node scripts/build-banner.mjs",
     "deploy": "wrangler deploy"
   }

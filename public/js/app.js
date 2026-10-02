@@ -20,29 +20,34 @@ const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)
 const prog = () => (store.progress[store.settings.map] ||= { discovered: [], mastery: {}, best: {}, stars: 0, played: 0 });
 
 // ---------------------------------------------------------------- modlar
+// Başlık ve açıklamalar haritaya göre değişebilir: t = mapDef.text ("il" / "ülke")
+const T = () => mapDef.text;
 const MODES = [
-  { id: 'explore',   icon: '🔍', title: 'Keşfet',        desc: 'İllere dokun, adını duy, bilgi kartını oku.', color: '#3DBE6E' },
-  { id: 'names',     icon: '🏷️', title: 'İsimli Harita',  desc: 'Bütün il adları haritada; dokun, bilgisini oku.', color: '#FF8A3D' },
-  { id: 'find',      icon: '🎯', title: 'İli Bul',        desc: 'Söylenen ili haritada bul.',                  color: '#4F8CFF' },
-  { id: 'identify',  icon: '❓', title: 'Bu Hangi İl?',   desc: 'Parlayan ilin adını seç.',                    color: '#A66CFF' },
+  { id: 'explore',   icon: '🔍', title: 'Keşfet',        desc: t => `${cap(t.pl)}e dokun, adını duy, bilgi kartını oku.`, color: '#3DBE6E' },
+  { id: 'names',     icon: '🏷️', title: 'İsimli Harita',  desc: t => `Bütün ${t.one} adları haritada; dokun, bilgisini oku.`, color: '#FF8A3D' },
+  { id: 'find',      icon: '🎯', title: t => `${cap(t.acc)} Bul`, desc: t => `Söylenen ${t.acc} haritada bul.`, color: '#4F8CFF' },
+  { id: 'identify',  icon: '❓', title: t => `Bu Hangi ${cap(t.one)}?`, desc: t => `Parlayan ${t.gen} adını seç.`, color: '#A66CFF' },
   { id: 'plate',     icon: '🚗', title: 'Plaka Avı',      desc: 'Plaka numarasından ili bul.',                 color: '#FF8A3D', needs: 'codeLabel' },
-  { id: 'neighbors', icon: '🤝', title: 'Komşular',       desc: 'Bir ilin bütün komşularını bul.',             color: '#22C1C3' },
+  { id: 'neighbors', icon: '🤝', title: 'Komşular',       desc: t => `Bir ${t.gen} bütün komşularını bul.`, color: '#22C1C3' },
   { id: 'nature',    icon: '🏞️', title: 'Doğa Avı',       desc: 'Dağları, gölleri ve nehirleri tanı.',         color: '#2BA84A', needs: 'features' },
   { id: 'atlas',     icon: '🧺', title: 'Zenginlikler Atlası', desc: 'Madenler, tarım ürünleri, bitki örtüsü nerede?', color: '#E0A020', needs: 'resources' },
   { id: 'resources', icon: '⛏️', title: 'Kaynak Avı',     desc: 'Hangi ürün nerede yetişir, maden nerede çıkar?', color: '#C0622B', needs: 'resources' },
   { id: 'mines',     icon: '💎', title: 'Kaynak Oyunu',   desc: 'Maden nerede çıkarılır? Şıklardan ili seç.',  color: '#8E5CF7', needs: 'resources' },
-  { id: 'timed',     icon: '⏱️', title: 'Zamana Karşı',   desc: '60 saniyede kaç il bulabilirsin?',            color: '#FF5C8A' },
+  { id: 'timed',     icon: '⏱️', title: 'Zamana Karşı',   desc: t => `60 saniyede kaç ${t.one} bulabilirsin?`, color: '#FF5C8A' },
 ];
-const LEVEL_HELP = {
-  easy: 'Kolay: 1 yanlıştan sonra bölge, 2 yanlıştan sonra doğru il gösterilir. 3 seçenek.',
-  normal: 'Normal: 2 yanlıştan sonra bölge, 3 yanlıştan sonra doğru il gösterilir. 4 seçenek.',
-  hard: 'Zor: Otomatik ipucu yok, harita renksiz başlar, seçenekler komşu illerden gelir.',
-};
+const mtext = (m, key) => typeof m[key] === 'function' ? m[key](T()) : m[key];
+const levelHelp = lvl => ({
+  easy: t => `Kolay: 1 yanlıştan sonra ${t.regionWord}, 2 yanlıştan sonra doğru ${t.one} gösterilir. 3 seçenek.`,
+  normal: t => `Normal: 2 yanlıştan sonra ${t.regionWord}, 3 yanlıştan sonra doğru ${t.one} gösterilir. 4 seçenek.`,
+  hard: t => `Zor: Otomatik ipucu yok, harita renksiz başlar, seçenekler komşu ${t.pl}den gelir.`,
+})[lvl](T());
+// İl için plaka, ülke için bayrak
+const badge = it => it.flag ? `<img class="flag-sm" src="flags/${it.flag}.svg" alt="">` : `<span class="plate">${it.code}</span>`;
 const CAT_COLORS = { maden: '#8E5CF7', enerji: '#FF7A1A', tarim: '#2EAA4A', hayvan: '#1E9BE0' };
 const RAINBOW = ['#FF6B6B', '#FFB020', '#3DBE6E', '#4F8CFF', '#A66CFF', '#FF5CA8', '#22C1C3', '#F57C3A'];
 
 // ---------------------------------------------------------------- uygulama durumu
-let mapDef, data, view, byId, byFid = new Map(), byRid = new Map(), colorMap = new Map();
+let mapDef, data, view, byId, byFid = new Map(), byRid = new Map(), byBid = new Map(), colorMap = new Map();
 let game = null;
 let labelMode = 'none';
 
@@ -52,6 +57,8 @@ async function loadMap(id) {
   byId = new Map(data.items.map(i => [i.id, i]));
   byFid = new Map((data.features || []).map(f => [f.id, f]));
   byRid = new Map((data.resources || []).map(r => [r.id, r]));
+  byBid = new Map((data.backdrop || []).map(b => [b.id, b]));
+  if (store.settings.region !== 'all' && !data.regions[store.settings.region]) store.settings.region = 'all';
   // Komşu iller farklı renk alsın diye açgözlü (greedy) graf boyama
   const order = [...data.items].sort((a, b) => b.neighbors.length - a.neighbors.length);
   const rainbow = new Map();
@@ -87,7 +94,7 @@ function renderHome() {
   for (const m of Object.values(MAPS)) {
     const b = el('button', { className: 'map-tab' + (m.id === s.map ? ' active' : ''), disabled: !!m.comingSoon },
       `<span>${m.flag}</span> ${m.title}${m.comingSoon ? ' <small>yakında</small>' : ''}`);
-    b.onclick = async () => { s.map = m.id; save(); await loadMap(m.id); renderHome(); };
+    b.onclick = async () => { if (m.id === s.map) return; s.map = m.id; await loadMap(m.id); save(); renderHome(); };
     picker.append(b);
   }
 
@@ -104,12 +111,14 @@ function renderHome() {
     const best = p.best[m.id];
     const b = el('button', { className: 'mode-card' }, `
       <span class="mode-icon" style="--mc:${m.color}">${m.icon}</span>
-      <span class="mode-text"><b>${m.title}</b><small>${m.desc}</small></span>
+      <span class="mode-text"><b>${mtext(m, 'title')}</b><small>${mtext(m, 'desc')}</small></span>
       ${best ? `<span class="mode-best">🏆 ${best}</span>` : ''}`);
     b.onclick = () => startGame(m.id);
     modes.append(b);
   }
 
+  $('#regionTitle').textContent = T().regionTitle;
+  $('#homeFoot').textContent = T().foot;
   const chips = $('#regionChips'); chips.innerHTML = '';
   const regionEntries = [['all', { name: 'Tümü', color: '#8892b0' }], ...Object.entries(data.regions)];
   for (const [id, r] of regionEntries) {
@@ -165,7 +174,7 @@ function startGame(modeId) {
   };
 
   show('game');
-  $('#hudTitle').innerHTML = `<span>${mode.icon}</span> ${mode.title}`;
+  $('#hudTitle').innerHTML = `<span>${mode.icon}</span> ${mtext(mode, 'title')}`;
   const free = modeId === 'explore' || modeId === 'atlas' || modeId === 'names';
   $('#hudStreakWrap').classList.toggle('hidden', free);
   const noScore = modeId === 'atlas' || modeId === 'names';
@@ -188,14 +197,20 @@ function startGame(modeId) {
   oldSvg.replaceWith(svg);
   view?.destroy();
   view = new MapView(svg, {
-    viewBox: data.viewBox, shapes: data.shapes, items: data.items, features: data.features, colorOf,
-    onTap: handleTap, onFeatureTap: handleFeatureTap, onHover: handleHover,
+    viewBox: data.viewBox, shapes: data.shapes, items: data.items, features: data.features, backdrop: data.backdrop, maxZoom: data.maxZoom, labelMin: data.labelMin, colorOf,
+    onTap: handleTap, onFeatureTap: handleFeatureTap, onBackdropTap: handleBackdropTap, onHover: handleHover,
   });
   // İsimli haritada dikey telefonda adlar okunsun diye başlangıçta biraz daha yakın aç
   if (modeId === 'names') view.startBoost = 2.4;
   if (modeId !== 'neighbors') for (const it of data.items) if (!game.poolIds.has(it.id)) view.set(it.id, 'off');
   if (modeId === 'explore') for (const id of prog().discovered) if (game.poolIds.has(id)) { view.set(id, 'found'); game.found.add(id); }
-  if (store.settings.region !== 'all') setTimeout(() => view.fitIds([...game.poolIds], 0.08, 100), 60);
+  // Bölge/kıta seçiliyse ona yakınlaş; soruyu kendisi yakınlaştıran modlarda ilk sorunun görünümünü ezme
+  const selfZoom = ['identify', 'neighbors', 'nature', 'mines', 'resources'].includes(modeId);
+  if (store.settings.region !== 'all' && !selfZoom) setTimeout(() => {
+    const bb = data.regions[store.settings.region].bb;
+    if (bb) view.fitRect({ x: bb[0], y: bb[1], w: bb[2], h: bb[3] }, 0.02, 100);
+    else view.fitIds([...game.poolIds], 0.08, 100);
+  }, 60);
 
   applyLayers();
   labelMode = modeId === 'names' ? 'all' : ['explore', 'nature', 'atlas', 'resources', 'mines'].includes(modeId) ? 'none' : (store.settings.level === 'hard' ? 'none' : 'found');
@@ -237,9 +252,9 @@ function next() {
   g.wrongTries = 0; g.hintLevel = 0; g.locked = false; g.neighborFound = new Set();
 
   if (g.mode.id === 'atlas') return atlasStart();
-  if (g.mode.id === 'names') return setPrompt('🏷️ Bir ile dokun, bilgi kartını aç! <small>Yakınlaştırınca adlar büyür.</small>');
+  if (g.mode.id === 'names') return setPrompt(`🏷️ Bir ${T().dat} dokun, bilgi kartını aç! <small>Yakınlaştırınca adlar büyür.</small>`);
   if (g.mode.id === 'explore') {
-    setPrompt(`Bir ${mapDef.itemNoun}e dokun ve keşfet! <small>(${g.found.size}/${g.items.length})</small>`);
+    setPrompt(`Bir ${T().dat} dokun ve keşfet! <small>(${g.found.size}/${g.items.length})</small>`);
     return;
   }
   g.index++;
@@ -259,8 +274,8 @@ function next() {
       break;
     case 'identify':
       view.set(c.id, 'target'); view.bringToFront(c.id);
-      view.fitIds([c.id, ...c.neighbors], 0.35, 320);
-      setPrompt('Parlayan il hangisi?', 'Parlayan il hangisi?');
+      view.fitIds([c.id, ...c.neighbors], 0.35, 320 * (data.zoomScale || 1));
+      setPrompt(`Parlayan ${T().one} hangisi?`, `Parlayan ${T().one} hangisi?`);
       renderChoices();
       break;
     case 'nature':
@@ -274,8 +289,8 @@ function next() {
       break;
     case 'neighbors':
       view.set(c.id, 'center'); view.bringToFront(c.id);
-      view.fitIds([c.id, ...c.neighbors], 0.12, 220);
-      setPrompt(`<b>${c.name}</b> ilinin komşularını bul <small id="nbCount">(0/${c.neighbors.length})</small>`, `${c.name} ilinin komşularını bul`);
+      view.fitIds([c.id, ...c.neighbors], 0.12, 220 * (data.zoomScale || 1));
+      setPrompt(`${T().nbPrompt(c.name)} <small id="nbCount">(0/${c.neighbors.length})</small>`, T().nbSpeech(c.name));
       break;
   }
   updateHud();
@@ -317,7 +332,7 @@ function handleHover(id, x, y) {
   const tip = $('#tooltip');
   if (!game || game.mode.id !== 'explore' || id == null) { tip.classList.add('hidden'); return; }
   const it = byId.get(id), r = $('#mapWrap').getBoundingClientRect();
-  tip.textContent = `${it.name} · ${it.code}`;
+  tip.textContent = it.code ? `${it.name} · ${it.code}` : it.name;
   tip.style.transform = `translate(${x - r.left + 14}px, ${y - r.top + 14}px)`;
   tip.classList.remove('hidden');
 }
@@ -335,8 +350,8 @@ function handleTap(id) {
   if (g.mode.id === 'explore') return exploreTap(item);
   if (g.mode.id === 'names') return namesTap(item);
   if (g.mode.id === 'identify') {
-    if (id === g.current.id) feedback('Evet, bu il! Adını aşağıdan seç 👇', 'info');
-    else { view.flash(id, 'peek', 700); feedback(`Bu <b>${item.name}</b>. Aşağıdan parlayan ilin adını seç!`, 'info'); }
+    if (id === g.current.id) feedback(`Evet, bu ${T().one}! Adını aşağıdan seç 👇`, 'info');
+    else { view.flash(id, 'peek', 700); feedback(`Bu <b>${item.name}</b>. Aşağıdan parlayan ${T().gen} adını seç!`, 'info'); }
     return;
   }
   if (g.mode.id === 'neighbors') return neighborTap(item);
@@ -351,8 +366,16 @@ function namesTap(item) {
   voice.say(item.name);
   view.clear('selected');
   view.set(item.id, 'selected'); view.bringToFront(item.id);
-  setPrompt(`📍 <b>${item.name}</b> <span class="plate">${item.code}</span> <small>${data.regions[item.region].name}</small>`);
+  setPrompt(`📍 <b>${item.name}</b> ${badge(item)} <small>${data.regions[item.region].name}</small>`);
   openInfo(item);
+}
+
+// Ülke olmayan gri bölgeler (Grönland, Antarktika…): yanlış sayılmaz, ne olduğu söylenir
+function handleBackdropTap(bid) {
+  const b = byBid.get(bid);
+  if (!game || !b || game.locked) return;
+  sfx.play('tap');
+  feedback(`🏳️ <b>${b.name}</b> <small>${b.note}</small>`, 'info');
 }
 
 function exploreTap(item) {
@@ -369,10 +392,10 @@ function exploreTap(item) {
     feedback(`✨ Yeni keşif: <b>${item.name}</b> +1 ⭐`, 'good');
     if (g.found.size === g.items.length) setTimeout(() => { confetti(); feedback('🎉 Hepsini keşfettin!', 'good'); }, 400);
   } else {
-    feedback(`📍 <b>${item.name}</b> · ${item.code} · ${data.regions[item.region].name}`, 'info');
+    feedback(`📍 <b>${item.name}</b> ${badge(item)} · ${data.regions[item.region].name}`, 'info');
   }
   refreshLabels();
-  setPrompt(`📍 <b>${item.name}</b> <span class="plate">${item.code}</span> <small>${data.regions[item.region].name}</small>`);
+  setPrompt(`📍 <b>${item.name}</b> ${badge(item)} <small>${data.regions[item.region].name}</small>`);
   updateHud();
   if (store.settings.infoExplore) openInfo(item);
   else showInfoButton(item);
@@ -424,10 +447,10 @@ function answerWrong(tapped, target) {
   const revealAt = lvl === 'easy' ? 2 : 3;
   let msg = `❌ Bu <b>${tapped.name}</b>. Tekrar dene!`;
   if (g.mode.id === 'timed') { msg = `❌ Bu <b>${tapped.name}</b>`; }
-  if (g.wrongTries >= regionAt && g.hintLevel < 1) { showHint(1); msg += ` <small>İpucu: ${data.regions[target.region].name} Bölgesi</small>`; }
+  if (g.wrongTries >= regionAt && g.hintLevel < 1) { showHint(1); msg += ` <small>İpucu: ${T().region(data.regions[target.region].name)}</small>`; }
   if (g.wrongTries >= revealAt) {
     if (lvl === 'hard' || g.mode.id === 'timed') return reveal(target, `❌ Bu <b>${tapped.name}</b>. Doğrusu <b>${target.name}</b>.`);
-    showHint(2); msg = `❌ Bu <b>${tapped.name}</b>. Parlayan ile dokun!`;
+    showHint(2); msg = `❌ Bu <b>${tapped.name}</b>. Parlayan ${T().dat} dokun!`;
   }
   feedback(msg, 'bad');
   updateHud();
@@ -469,7 +492,7 @@ function neighborTap(item) {
     if (g.neighborFound.size === c.neighbors.length) {
       g.locked = true;
       if (g.wrongTries === 0) g.correct++; else g.missed.add(c.id);
-      feedback(`🎉 <b>${c.name}</b> ilinin bütün komşularını buldun!`, 'good');
+      feedback(`🎉 ${T().nbDone(c.name)}`, 'good');
       sfx.play('streak');
       setTimeout(() => { if (game === g) { for (const n of c.neighbors) { view.set(n, 'found', false); g.found.delete(n); } view.set(c.id, 'found'); g.found.add(c.id); refreshLabels(); next(); } }, 1500);
     } else feedback(`✅ <b>${item.name}</b> komşu!`, 'good');
@@ -1076,7 +1099,43 @@ function mineReveal(msg) {
 }
 
 // ---------------------------------------------------------------- bilgi kartı
-function openInfo(item, { resume = false } = {}) {
+// Ülke kartı (Dünya haritası)
+function openCountryInfo(item, { resume = false } = {}) {
+  const r = data.regions[item.region];
+  const pop = item.pop >= 1000 ? `${(item.pop / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} milyon` : `${fmt(Math.max(1, item.pop))} bin`;
+  const neighbors = item.neighbors.map(n => byId.get(n)).sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+  $('#infoBody').innerHTML = `
+    <div class="info-head" style="--c:${colorOf(item)}">
+      <img class="flag" src="flags/${item.flag}.svg" alt="${item.name} bayrağı">
+      <div><h3>${item.name}</h3><span class="chip region"><i style="background:${r.color}"></i>${r.name}</span></div>
+      <button class="small-btn" id="infoSpeak" aria-label="Kartı sesli oku">🔊</button>
+    </div>
+    <div class="info-grid">
+      <div class="fact-tile"><span>🏛️</span><b>${item.capital}</b><small>Başkent</small></div>
+      <div class="fact-tile"><span>👥</span><b>~${pop}</b><small>Nüfus · ${item.popRank}. sırada</small></div>
+      <div class="fact-tile"><span>📐</span><b>~${fmt(item.area)} km²</b><small>Yüzölçümü · ${item.areaRank}. sırada</small></div>
+    </div>
+    ${item.note ? `<div class="info-row did-you-know"><h4>💡 Biliyor muydun?</h4><p>${item.note}</p></div>` : ''}
+    <div class="info-row"><h4>🗺️ Komşuları (${neighbors.length})</h4>${neighbors.length
+      ? `<div class="chips small">${neighbors.map(nb => `<button class="chip" data-nb="${nb.id}">${nb.name}</button>`).join('')}</div>`
+      : '<p>Kara sınırı olan komşusu yok; dört yanı denizlerle çevrili.</p>'}</div>
+    ${resume ? '<button class="primary-btn wide" id="infoContinue">Devam et →</button>' : ''}`;
+  $('#infoSpeak').onclick = () => voice.say(`${item.name}. Başkenti ${item.capital}. ${T().regionLoc(r.name)}. ${item.note || ''}`, { force: true });
+  bindNeighborChips(resume);
+  if (resume) $('#infoContinue').onclick = () => { closeInfo(); next(); };
+  showSheet(resume);
+}
+function bindNeighborChips(resume) {
+  $('#infoBody').querySelectorAll('[data-nb]').forEach(b => b.onclick = () => {
+    const nb = byId.get(+b.dataset.nb);
+    if (game?.mode.id === 'explore') exploreTap(nb); else if (game?.mode.id === 'names') namesTap(nb);
+    else { view.flash(nb.id, 'peek', 1400); openInfo(nb, { resume }); }
+  });
+}
+
+function openInfo(item, opts = {}) {
+  if (!item.plate) return openCountryInfo(item, opts);
+  const { resume = false } = opts;
   const r = data.regions[item.region];
   const pop = item.pop >= 1000 ? `${(item.pop / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} milyon` : `${fmt(item.pop)} bin`;
   const neighbors = item.neighbors.map(n => byId.get(n)).sort((a, b) => a.name.localeCompare(b.name, 'tr'));
@@ -1099,11 +1158,7 @@ function openInfo(item, { resume = false } = {}) {
     <div class="info-row"><h4>🗺️ Komşuları</h4><div class="chips small">${neighbors.map(nb => `<button class="chip" data-nb="${nb.id}">${nb.name}</button>`).join('')}</div></div>
     ${resume ? '<button class="primary-btn wide" id="infoContinue">Devam et →</button>' : ''}`;
   $('#infoSpeak').onclick = () => voice.say(`${item.name}. ${r.name} Bölgesinde. Plaka kodu ${item.plate}. ${item.fact} Meşhur lezzetleri: ${item.food}.`, { force: true });
-  $('#infoBody').querySelectorAll('[data-nb]').forEach(b => b.onclick = () => {
-    const nb = byId.get(+b.dataset.nb);
-    if (game?.mode.id === 'explore') exploreTap(nb); else if (game?.mode.id === 'names') namesTap(nb);
-    else { view.flash(nb.id, 'peek', 1400); openInfo(nb, { resume }); }
-  });
+  bindNeighborChips(resume);
   $('#infoBody').querySelectorAll('[data-feat]').forEach(b => b.onclick = () => {
     const f = byFid.get(b.dataset.feat);
     if (game?.mode.id === 'explore') handleFeatureTap(f.id); else openFeatureInfo(f, { resume });
@@ -1227,8 +1282,8 @@ function openSettings() {
   $('#sVoice').checked = s.voice; $('#sSfx').checked = s.sfx;
   $('#sVoice').disabled = !voice.available;
   segSetup('#sColors', s.colors, v => { s.colors = v; save(); });
-  segSetup('#sLevel', s.level, v => { s.level = v; save(); $('#levelHelp').textContent = LEVEL_HELP[v]; });
-  $('#levelHelp').textContent = LEVEL_HELP[s.level];
+  segSetup('#sLevel', s.level, v => { s.level = v; save(); $('#levelHelp').textContent = levelHelp(v); });
+  $('#levelHelp').textContent = levelHelp(s.level);
   $('#settings').showModal();
 }
 function applySettings() {
@@ -1265,7 +1320,7 @@ function bindUi() {
       const left = g.current.neighbors.filter(n => !g.neighborFound.has(n));
       if (left.length) { view.set(left[0], 'hint'); g.hintLevel = 1; g.streak = 0; }
     } else { showHint(g.hintLevel + 1 > 2 ? 2 : g.hintLevel + 1); g.streak = 0; }
-    if (g.hintLevel === 1 && g.mode.id !== 'neighbors') feedback(`💡 ${data.regions[g.current.region].name} Bölgesi'nde`, 'info');
+    if (g.hintLevel === 1 && g.mode.id !== 'neighbors') feedback(`💡 ${T().regionLoc(data.regions[g.current.region].name)}`, 'info');
     updateHud();
   };
   $('#btnSkip').onclick = () => {

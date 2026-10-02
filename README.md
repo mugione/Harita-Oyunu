@@ -4,9 +4,9 @@
 
 # 🧭 Harita Kaşifi
 
-### Çocuklar için eğitici, renkli ve kurulabilir Türkiye haritası oyunu
+### Çocuklar için eğitici, renkli ve kurulabilir Türkiye ve Dünya haritası oyunu
 
-**İle dokun → adını duy → bilgisini öğren → puanı kap!** 🎯
+**İle ya da ülkeye dokun → adını duy → bilgisini öğren → puanı kap!** 🎯
 
 <p>
   <a href="https://harita-kasifi.mlakin.workers.dev"><img src="https://img.shields.io/badge/▶%20HEMEN%20OYNA-harita--kasifi-3B5BFD?style=for-the-badge&labelColor=1B2559" alt="Hemen oyna"></a>
@@ -32,7 +32,7 @@
 
 > Coğrafya ezberlenecek bir liste değil, keşfedilecek bir dünyadır. 🌍
 
-Harita Kaşifi, çocukların **81 ili** oynayarak tanımasını sağlar. Her dokunuşta ilin adı **sesli okunur**, her doğru cevapta harita biraz daha **renklenir**, her ilin kendi **bilgi kartı** vardır. Öğretmenler sınıfta tahtaya yansıtabilir, veliler tablete kurabilir, çocuklar kendi başına oynayabilir.
+Harita Kaşifi, çocukların **81 ili** oynayarak tanımasını sağlar. Her dokunuşta ilin adı **sesli okunur**, her doğru cevapta harita biraz daha **renklenir**, her ilin kendi **bilgi kartı** vardır. Türkiye'yi bitiren çocuk **🌍 Dünya** sekmesinde **199 ülkeyi**, bayraklarını ve başkentlerini keşfetmeye devam eder. Öğretmenler sınıfta tahtaya yansıtabilir, veliler tablete kurabilir, çocuklar kendi başına oynayabilir.
 
 <table>
 <tr>
@@ -91,7 +91,31 @@ Türkiye'nin bitki örtüsü haritası (nemli orman, maki, bozkır, dağ çayır
 
 </td>
 </tr>
+<tr>
+<td valign="top">
+
+### 🌍 Bütün dünya bir oyun
+**199 ülke, 6 kıta.** Ülkeyi bul, parlayan ülkeyi tanı, komşularını say. Kıta seç, harita oraya yakınlaşsın. Vatikan ve Tuvalu gibi minicik ülkeler bile parmakla seçilebilir.
+
+</td>
+<td valign="top">
+
+### 🏳️ Her ülkenin kartı
+Bayrak, başkent, nüfus, yüzölçümü, dünya sıralaması ve komşular. KKTC, Kosova, Filistin gibi tartışmalı bölgelerde kısa ve anlaşılır bir açıklama.
+
+</td>
+</tr>
 </table>
+
+## 🌍 Dünya Haritası
+
+Ana menüden **🌍 Dünya** sekmesine geç: **199 ülke**, 6 kıta, her ülkenin bayrağı, başkenti, nüfusu, yüzölçümü ve komşuları.
+
+- **Modlar:** Keşfet, İsimli Harita, Ülkeyi Bul, Bu Hangi Ülke?, Komşular, Zamana Karşı
+- **Kıta seçimi:** Avrupa, Asya, Afrika, Kuzey Amerika, Güney Amerika, Okyanusya; harita seçilen kıtaya yakınlaşır
+- **Küçük ülkeler:** Vatikan, Monako, Tuvalu gibi parmakla seçilemeyecek kadar küçük 49 ülkenin üzerinde dokunma noktası vardır
+- **Ülke olmayan bölgeler** (Grönland, Antarktika, Porto Riko…) gri çizilir; dokununca hangi ülkeye bağlı olduğu söylenir
+- **Tartışmalı bölgeler:** KKTC, Kosova, Filistin, Tayvan ve Batı Sahra haritadadır; Türkiye'nin resmî tutumu esas alınmış, ayrıntılar bilgi kartında açıklanmıştır
 
 ## 🎮 Oyun Modları
 
@@ -185,25 +209,30 @@ harita-kasifi/
 │   ├── sw.js                   → Çevrimdışı önbellek (service worker)
 │   ├── css/style.css           → Tasarım, açık/koyu tema, responsive düzen
 │   ├── icons/                  → Uygulama simgeleri
+│   ├── flags/                  → 199 ülke bayrağı (SVG)
 │   └── js/
 │       ├── app.js              → Oyun motoru, modlar, puanlama, bilgi kartı
 │       ├── map-view.js         → Dokunmatik SVG harita (kaydır, yakınlaştır, dokun)
 │       ├── sound.js            → Ses efektleri + Türkçe sesli okuma
 │       └── maps/
-│           ├── index.js        → Harita kataloğu (Türkiye, yakında Dünya)
+│           ├── index.js        → Harita kataloğu (Türkiye ve Dünya)
 │           ├── tr-info.js      → 81 ilin eğitici bilgileri ✍️
 │           ├── tr-geo.js       → İl sınırları (otomatik üretilir)
 │           ├── tr-layers-info.js → Dağ, göl, nehir, deniz bilgileri ✍️
 │           ├── tr-resources.js → Madenler, tarım, enerji, bitki örtüsü, bölge özetleri ✍️
-│           └── tr-layers.js    → Katman şekilleri (otomatik üretilir)
+│           ├── tr-layers.js    → Katman şekilleri (otomatik üretilir)
+│           ├── world-info.js   → 199 ülkenin Türkçe adı, başkenti, kıtası ✍️
+│           └── world-geo.js    → Ülke sınırları (otomatik üretilir)
 ├── 📁 scripts/
 │   ├── build-map.mjs           → GeoJSON → SVG, komşuluk ve yüzölçümü hesabı
 │   ├── extract-physical.mjs    → Natural Earth'ten Türkiye'nin nehir ve gölleri
 │   ├── build-layers.mjs        → Katman şekilleri + hangi ilde olduklarının hesabı
+│   ├── build-world.mjs         → Natural Earth → Dünya haritası, komşuluklar, küçük ülkeler
 │   └── build-banner.mjs        → README kapak görseli
 ├── 📁 data/
 │   ├── tr-cities.geojson       → İl sınırları kaynak verisi
-│   └── tr-physical.geojson     → Nehir ve göl kaynak verisi
+│   ├── tr-physical.geojson     → Nehir ve göl kaynak verisi
+│   └── ne_50m_admin_0_countries.geojson → Dünya ülke sınırları
 └── wrangler.jsonc              → Cloudflare yapılandırması
 ```
 
@@ -227,13 +256,15 @@ flowchart LR
 - **Komşuluklar** sınır noktalarının birbirine yakınlığından otomatik hesaplanır.
 - **Yüzölçümleri** küresel alan formülüyle hesaplanır, sıralamalar buradan çıkar.
 - **Nehir ve göllerin illeri** şekillerin il sınırlarıyla kesiştirilmesiyle otomatik bulunur; dağlar elle işaretlenmiştir.
-- **Oyun motoru** haritadan bağımsızdır: aynı modlar ileride Dünya haritasıyla da çalışır.
+- **Oyun motoru** haritadan bağımsızdır: aynı modlar Türkiye ve Dünya haritasında çalışır; oyun metinleri ("il" / "ülke") haritaya göre değişir.
+- **Dünya haritası** Natural Earth verisinden Equal Earth izdüşümüyle üretilir; komşuluklar sınırlardan hesaplanır, küçük ülkelere dokunma noktası eklenir.
 
 Harita verisini değiştirdiysen yeniden üret:
 
 ```bash
 npm run build:map      # il sınırları
 npm run build:layers   # dağlar, göller, nehirler (tr-layers-info.js değişince)
+npm run build:world    # Dünya haritası (world-info.js değişince)
 ```
 
 ## 🗺️ Yol Haritası
@@ -244,28 +275,31 @@ npm run build:layers   # dağlar, göller, nehirler (tr-layers-info.js değişin
 - [x] Bilgi kartları ve komşuluk verisi
 - [x] 🏞️ Coğrafi katmanlar: dağlar, göller, nehirler, denizler
 - [x] 🧺 Madenler, tarım ürünleri, enerji kaynakları ve bitki örtüsü
-- [ ] 🌍 **Dünya haritası** (ülkeler, başkentler, bayraklar)
+- [x] 🌍 **Dünya haritası:** 199 ülke, kıtalar, bayraklar, başkentler, komşular
+- [ ] 🏳️ Bayrak Avı ve 🏛️ Başkentler modları
+- [ ] 🏔️ Dünya'nın dağları, nehirleri, çölleri ve harikaları
 - [ ] 🏅 Rozetler ve başarımlar
 - [ ] 🧑‍🏫 Öğretmen modu (sınıf için özel soru listeleri)
 - [ ] 🌾 Ovalar, platolar, milli parklar
 
 <details>
-<summary><b>🌍 Dünya haritasını (ya da başka bir haritayı) nasıl eklerim?</b></summary>
+<summary><b>🗺️ Yeni bir harita (ör. bir kıta ya da başka bir ülke) nasıl eklenir?</b></summary>
 
 <br>
 
-`public/js/maps/index.js` içindeki `world` kaydına bir `load()` fonksiyonu yaz. Bu fonksiyonun şu yapıyı döndürmesi yeterli:
+`public/js/maps/index.js` içine yeni bir kayıt ekle. Kaydın `text` alanı oyun metinlerindeki kelimeleri ("il" / "ülke") ve eklerini, `load()` fonksiyonu da şu yapıyı döndürür:
 
 ```js
 {
   viewBox: [0, 0, 1000, 500],
-  shapes:  { [id]: { d, cx, cy, lr, area, neighbors } },
-  items:   [{ id, name, region, code, pop, food, places, fact, neighbors, area }],
-  regions: { [regionId]: { name, color } },
+  shapes:   { [id]: { d, cx, cy, lr, cw, area, neighbors, bb?, tiny? } },
+  items:    [{ id, name, region, pop, neighbors, area, ... }],
+  regions:  { [regionId]: { name, color, bb? } },
+  backdrop: [{ id, d, name, note }],   // isteğe bağlı: ülke olmayan gri bölgeler
 }
 ```
 
-`scripts/build-map.mjs` betiği bu yapıyı üretmek için örnek alınabilir. Oyun motoru, modlar ve harita bileşeni değişmeden çalışır.
+`scripts/build-world.mjs` betiği bu yapıyı üretmek için örnek alınabilir. Oyun motoru, modlar ve harita bileşeni değişmeden çalışır.
 
 </details>
 
@@ -283,7 +317,8 @@ Katkılarını bekliyoruz! Özellikle **eğitici içerik** konusunda her düzelt
 ## 🙏 Teşekkürler
 
 - İl sınırları: [cihadturhan/tr-geojson](https://github.com/cihadturhan/tr-geojson)
-- Nehir ve göller: [Natural Earth](https://www.naturalearthdata.com) (public domain)
+- Nehir, göl ve ülke sınırları: [Natural Earth](https://www.naturalearthdata.com) (public domain)
+- Bayraklar: [flag-icons](https://github.com/lipis/flag-icons) (MIT); KKTC bayrağı projeye özel çizildi
 - Yazı tipleri: [Baloo 2](https://fonts.google.com/specimen/Baloo+2) ve [Nunito](https://fonts.google.com/specimen/Nunito) (Google Fonts)
 - Nüfus verileri: [TÜİK](https://www.tuik.gov.tr) Adrese Dayalı Nüfus Kayıt Sistemi
 

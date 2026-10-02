@@ -4,7 +4,7 @@ const NS = 'http://www.w3.org/2000/svg';
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export class MapView {
-  constructor(svg, { viewBox, shapes, items, features = [], colorOf, onTap, onFeatureTap, onHover }) {
+  constructor(svg, { viewBox, shapes, items, features = [], backdrop = [], maxZoom = 14, labelMin = 4.5, colorOf, onTap, onFeatureTap, onBackdropTap, onHover }) {
     this.svg = svg;
     this.bounds = { x: viewBox[0], y: viewBox[1], w: viewBox[2], h: viewBox[3] };
     this.vb = { ...this.bounds };
@@ -13,6 +13,11 @@ export class MapView {
     this.colorOf = colorOf;
     this.onTap = onTap;
     this.onFeatureTap = onFeatureTap;
+    this.onBackdropTap = onBackdropTap;
+    this.backdrop = backdrop;
+    this.maxZoom = maxZoom;
+    this.labelMin = labelMin;
+    this.dots = new Map();
     this.features = features;
     this.featureEls = new Map();
     this.onHover = onHover;
@@ -45,11 +50,12 @@ export class MapView {
       p.classList.add('shape');
       this.gShapes.append(p);
       this.paths.set(item.id, p);
+      if (s.tiny) this.dots.set(item.id, this.renderDot(item, s));
 
       const t = document.createElementNS(NS, 'text');
       t.setAttribute('x', s.cx);
       t.setAttribute('y', s.cy);
-      t.dataset.name = item.name;
+      t.dataset.name = item.short || item.name;
       t.dataset.code = item.code ?? '';
       t.style.setProperty('--lr', s.lr);
       t.dataset.cw = s.cw ?? s.lr * 2;
@@ -58,10 +64,37 @@ export class MapView {
     }
     const shadowWrap = document.createElementNS(NS, 'g');
     shadowWrap.setAttribute('filter', 'url(#shadow)');
+    // Ülke olmayan bölgeler (Grönland, Antarktika…) gri çizilir; dokununca ne olduklarını söyler
+    if (this.backdrop.length) {
+      const gb = document.createElementNS(NS, 'g');
+      gb.setAttribute('class', 'backdrop');
+      for (const b of this.backdrop) {
+        const p = document.createElementNS(NS, 'path');
+        p.setAttribute('d', b.d);
+        p.dataset.bid = b.id;
+        gb.append(p);
+      }
+      shadowWrap.append(gb);
+    }
     shadowWrap.append(this.gShapes);
     this.gMarkers = document.createElementNS(NS, 'g');
     this.gMarkers.setAttribute('class', 'markers');
-    this.svg.append(shadowWrap, this.renderLayers(), this.gMarkers, this.gLabels);
+    this.gDots = document.createElementNS(NS, 'g');
+    this.gDots.setAttribute('class', 'dots');
+    this.gDots.append(...this.dots.values());
+    this.svg.append(shadowWrap, this.renderLayers(), this.gDots, this.gMarkers, this.gLabels);
+  }
+
+  // Parmakla seçilemeyecek kadar küçük ülkeler için ekranda sabit boyutlu dokunma noktası
+  renderDot(item, s) {
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('transform', `translate(${s.cx} ${s.cy})`);
+    g.setAttribute('class', 'dot');
+    g.dataset.id = item.id;
+    g.style.setProperty('--c', this.colorOf(item));
+    g.style.setProperty('--lr', s.lr);
+    g.innerHTML = '<g class="pin"><circle class="dot-hit" r="11"/><circle class="dot-mark" r="4.5"/></g>';
+    return g;
   }
 
   // Coğrafi katmanlar: göller, nehirler, dağlar, denizler (il şekillerinin üstünde, il etiketlerinin altında)
@@ -154,19 +187,28 @@ export class MapView {
   destroy() { this._ro?.disconnect(); cancelAnimationFrame(this._raf); }
 
   recolor() {
-    for (const item of this.items) this.paths.get(item.id)?.style.setProperty('--c', this.colorOf(item));
+    for (const item of this.items) {
+      this.paths.get(item.id)?.style.setProperty('--c', this.colorOf(item));
+      this.dots.get(item.id)?.style.setProperty('--c', this.colorOf(item));
+    }
   }
 
   // ---- durum sınıfları ----
-  set(id, cls, on = true) { this.paths.get(id)?.classList.toggle(cls, on); }
-  clear(...classes) { for (const p of this.paths.values()) p.classList.remove(...classes); }
+  // Küçük ülkelerin dokunma noktası da ülkeyle aynı durum sınıflarını taşır
+  set(id, cls, on = true) { this.paths.get(id)?.classList.toggle(cls, on); this.dots.get(id)?.classList.toggle(cls, on); }
+  clear(...classes) { for (const p of this.paths.values()) p.classList.remove(...classes); for (const d of this.dots.values()) d.classList.remove(...classes); }
   flash(id, cls, ms = 900) {
-    const p = this.paths.get(id); if (!p) return;
-    p.classList.remove(cls); void p.getBBox(); p.classList.add(cls);
-    clearTimeout(p['_t' + cls]);
-    p['_t' + cls] = setTimeout(() => p.classList.remove(cls), ms);
+    for (const p of [this.paths.get(id), this.dots.get(id)]) {
+      if (!p) continue;
+      p.classList.remove(cls); void p.getBBox(); p.classList.add(cls);
+      clearTimeout(p['_t' + cls]);
+      p['_t' + cls] = setTimeout(() => p.classList.remove(cls), ms);
+    }
   }
-  bringToFront(id) { const p = this.paths.get(id); if (p) this.gShapes.append(p); }
+  bringToFront(id) {
+    const p = this.paths.get(id); if (p) this.gShapes.append(p);
+    const d = this.dots.get(id); if (d) this.gDots.append(d);
+  }
 
   // mode: 'none' | 'name' | 'code' | 'found' | 'all' (bütün adlar, ilin içine sığdırılmış)
   setLabels(mode, foundSet) {
@@ -185,7 +227,7 @@ export class MapView {
       t.style.setProperty('--fs', 10);
       const w = t.getComputedTextLength() || t.textContent.length * 5.5;
       const lr = +t.style.getPropertyValue('--lr'), cw = +t.dataset.cw;
-      const fs = Math.max(4.5, Math.min(10 * cw * 1.1 / w, lr * 1.3, 13));
+      const fs = Math.max(this.labelMin, Math.min(10 * cw * 1.1 / w, lr * 1.3, 13));
       t.style.setProperty('--fs', fs.toFixed(2));
     }
   }
@@ -215,7 +257,7 @@ export class MapView {
   }
   clamp(v) {
     const home = this.homeVb(), a = this.aspect(), b = this.bounds;
-    v.w = clampN(v.w, home.w / 14, home.w * 1.05);
+    v.w = clampN(v.w, home.w / this.maxZoom, home.w * 1.05);
     v.h = v.w * a;
     // Harita görünümden büyükse kenarlarda en fazla %8 boşluk kalsın; küçükse haritayı ortala
     const axis = (pos, size, start, len) => {
@@ -262,7 +304,7 @@ export class MapView {
     cancelAnimationFrame(this._raf);
     const p = this.clientToSvg(cx, cy), v = { ...this.vb };
     const home = this.homeVb();
-    const nw = clampN(v.w / factor, home.w / 14, home.w * 1.05);
+    const nw = clampN(v.w / factor, home.w / this.maxZoom, home.w * 1.05);
     const k = nw / v.w;
     v.x = p.x - (p.x - v.x) * k; v.y = p.y - (p.y - v.y) * k; v.w = nw;
     this.view = this.clamp(v);
@@ -272,7 +314,9 @@ export class MapView {
   fitIds(ids, padRatio = 0.25, minW = 160) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const id of ids) {
-      const b = this.paths.get(id)?.getBBox(); if (!b) continue;
+      // Uzak denizaşırı parçalar (ör. Fransız Guyanası) yakınlaştırmayı bozmasın diye varsa odak kutusu kullanılır
+      const bb = this.shapes[id]?.bb;
+      const b = bb ? { x: bb[0], y: bb[1], width: bb[2], height: bb[3] } : this.paths.get(id)?.getBBox(); if (!b) continue;
       x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
     }
     if (!isFinite(x0)) return this.reset();
@@ -334,6 +378,7 @@ export class MapView {
         const hit = this.hitAt(e.clientX, e.clientY);
         if (hit?.fid) this.onFeatureTap?.(hit.fid);
         else if (hit?.id != null) this.onTap?.(hit.id);
+        else if (hit?.bid) this.onBackdropTap?.(hit.bid);
       }
     };
     svg.addEventListener('pointerup', end);
@@ -348,7 +393,10 @@ export class MapView {
     const el = document.elementFromPoint(x, y);
     const f = el?.closest?.('[data-fid]');
     if (f) return { fid: f.dataset.fid };
+    const dot = el?.closest?.('.dot');
+    if (dot && !dot.classList.contains('off')) return { id: Number(dot.dataset.id) };
     if (el?.classList?.contains('shape') && !el.classList.contains('off')) return { id: Number(el.dataset.id) };
+    if (el?.dataset?.bid) return { bid: el.dataset.bid };
     return null;
   }
   idAt(x, y) { return this.hitAt(x, y)?.id ?? null; }
